@@ -25,6 +25,8 @@ const waveformContainer = document.getElementById('waveform');
 const waveformLoading = document.getElementById('waveformLoading');
 const toggleWaveformBtn = document.getElementById('toggleWaveformBtn');
 const normalizeCheckbox = document.getElementById('normalizeCheckbox');
+const zoomToTrimBtn = document.getElementById('zoomToTrimBtn');
+const resetZoomBtn = document.getElementById('resetZoomBtn');
 
 // トリミング関連の要素
 const startSlider = document.getElementById('startSlider');
@@ -40,6 +42,8 @@ const resetTrimBtn = document.getElementById('resetTrimBtn');
 
 // WaveSurferインスタンス
 let wavesurfer = null;
+let wavesurferRegions = null;
+let trimRegion = null;
 let waveformVisible = false;
 
 // トリミング状態
@@ -425,6 +429,40 @@ function updateRangeHighlight() {
   
   rangeHighlight.style.left = `${startPercent}%`;
   rangeHighlight.style.width = `${endPercent - startPercent}%`;
+  
+  // 波形のregionを更新
+  updateWaveformRegion();
+  
+  // 波形のズームを更新
+  updateWaveformZoom();
+}
+
+// 波形をトリミング範囲にズーム
+function updateWaveformZoom() {
+  if (!wavesurfer || !videoPlayer.duration) return;
+  
+  const duration = videoPlayer.duration;
+  const startTime = trimState.startTime;
+  const endTime = trimState.endTime;
+  const trimDuration = endTime - startTime;
+  
+  // ズーム倍率を計算（全体の長さ / トリミング範囲）
+  const zoomLevel = duration / trimDuration;
+  
+  // WaveSurferのズームを設定（倍率を適切な範囲に制限）
+  const clampedZoom = Math.max(1, Math.min(zoomLevel, 100));
+  
+  try {
+    wavesurfer.zoom(clampedZoom);
+    
+    // トリミング開始位置にスクロール
+    const scrollPercent = startTime / duration;
+    const container = waveformContainer;
+    const scrollLeft = scrollPercent * (container.scrollWidth - container.clientWidth);
+    container.scrollLeft = scrollLeft;
+  } catch (error) {
+    console.error('ズームエラー:', error);
+  }
 }
 
 // トリミングスライダーの初期化
@@ -553,6 +591,34 @@ function initWaveSurfer() {
     interact: true
   });
 
+  // Regionsプラグインを初期化
+  wavesurferRegions = wavesurfer.registerPlugin(WaveSurfer.Regions.create());
+
+  // 既存のトリミング範囲でregionを作成
+  if (videoPlayer.duration) {
+    updateWaveformRegion();
+  }
+
+  // Region更新イベント - ドラッグでトリミング範囲を変更
+  wavesurferRegions.on('region-updated', (region) => {
+    if (region.id === 'trim-region') {
+      const duration = videoPlayer.duration;
+      trimState.startTime = region.start;
+      trimState.endTime = region.end;
+      trimState.duration = region.end - region.start;
+
+      // スライダーを更新
+      startSlider.value = (region.start / duration) * 100;
+      endSlider.value = (region.end / duration) * 100;
+
+      // 表示を更新
+      startTimeDisplay.textContent = formatTimeWithMillis(region.start);
+      endTimeDisplay.textContent = formatTimeWithMillis(region.end);
+      durationDisplay.textContent = formatTimeWithMillis(region.end - region.start);
+      updateRangeHighlight();
+    }
+  });
+
   // 波形がロードされたら
   wavesurfer.on('ready', () => {
     waveformLoading.style.display = 'none';
@@ -589,10 +655,29 @@ function initWaveSurfer() {
   return wavesurfer;
 }
 
-// 波形上のトリミング範囲を更新（将来の拡張用）
+// 波形上のトリミング範囲を更新
 function updateWaveformRegion() {
-  // Regionsプラグインを使用する場合はここで実装
-  // 現時点では未実装
+  if (!wavesurferRegions || !videoPlayer.duration) return;
+
+  // 既存のregionを削除
+  if (trimRegion) {
+    trimRegion.remove();
+    trimRegion = null;
+  }
+
+  // 新しいregionを作成
+  try {
+    trimRegion = wavesurferRegions.addRegion({
+      id: 'trim-region',
+      start: trimState.startTime,
+      end: trimState.endTime,
+      color: 'rgba(102, 126, 234, 0.3)',
+      drag: true,
+      resize: true
+    });
+  } catch (error) {
+    console.error('Region作成エラー:', error);
+  }
 }
 
 // 波形表示を切り替え
@@ -610,6 +695,8 @@ function toggleWaveform() {
     waveformLoading.style.display = 'block';
     waveformLoading.textContent = '波形を生成中...';
     toggleWaveformBtn.textContent = '波形を非表示';
+    zoomToTrimBtn.style.display = 'inline-block';
+    resetZoomBtn.style.display = 'inline-block';
 
     try {
       // video要素を使用してWaveSurferを初期化
@@ -624,9 +711,13 @@ function toggleWaveform() {
     waveformContainer.style.display = 'none';
     waveformLoading.style.display = 'none';
     toggleWaveformBtn.textContent = '波形を表示';
+    zoomToTrimBtn.style.display = 'none';
+    resetZoomBtn.style.display = 'none';
     if (wavesurfer) {
       wavesurfer.destroy();
       wavesurfer = null;
+      wavesurferRegions = null;
+      trimRegion = null;
     }
   }
 }
@@ -645,3 +736,28 @@ normalizeCheckbox.addEventListener('change', () => {
 
 // 波形表示ボタンのクリック
 toggleWaveformBtn.addEventListener('click', toggleWaveform);
+
+// トリミング範囲にズーム
+zoomToTrimBtn.addEventListener('click', () => {
+  if (!wavesurfer || !videoPlayer.duration) {
+    alert('動画と波形を読み込んでください');
+    return;
+  }
+  updateWaveformZoom();
+});
+
+// ズームをリセット
+resetZoomBtn.addEventListener('click', () => {
+  if (!wavesurfer) {
+    alert('波形を表示してください');
+    return;
+  }
+  
+  try {
+    // ズームをリセット（倍率1）
+    wavesurfer.zoom(1);
+    waveformContainer.scrollLeft = 0;
+  } catch (error) {
+    console.error('ズームリセットエラー:', error);
+  }
+});
