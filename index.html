@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Clip Tool</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>YouTube Clip Tool</h1>
+      <p>YouTube動画を検索・ダウンロードして編集できるツール</p>
+    </header>
+
+    <main>
+      <!-- YouTube検索セクション -->
+      <section class="search-section">
+        <h2>YouTube動画を検索</h2>
+        <div class="search-bar">
+          <input 
+            type="text" 
+            id="searchQuery" 
+            placeholder="キーワードまたはYouTube URLを入力"
+            class="search-input"
+          >
+          <button id="searchBtn" class="btn btn-primary">検索</button>
+        </div>
+        
+        <div id="searchResults" class="search-results"></div>
+      </section>
+
+      <!-- ダウンロードセクション -->
+      <section class="download-section">
+        <h2>動画をダウンロード</h2>
+        <div class="download-controls">
+          <input 
+            type="text" 
+            id="downloadUrl" 
+            placeholder="YouTube URLを入力"
+            class="download-input"
+          >
+          <button id="downloadBtn" class="btn btn-success">ダウンロード</button>
+        </div>
+        
+        <div id="downloadProgress" class="progress-container" style="display: none;">
+          <div class="progress-bar">
+            <div id="progressBar" class="progress-fill"></div>
+          </div>
+          <span id="progressText" class="progress-text">0%</span>
+        </div>
+        
+        <div id="downloadStatus" class="status-message"></div>
+      </section>
+
+      <!-- ダウンロード済み動画セクション -->
+      <section class="downloaded-section">
+        <h2>ダウンロード済み動画</h2>
+        <button id="refreshBtn" class="btn btn-secondary">更新</button>
+        <div id="downloadedVideos" class="video-list"></div>
+      </section>
+
+      <!-- 動画プレビューセクション -->
+      <section class="preview-section" id="previewSection" style="display: none;">
+        <h2>動画プレビュー</h2>
+        <video id="videoPlayer" controls class="video-player"></video>
+        <div class="video-info" id="videoInfo"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

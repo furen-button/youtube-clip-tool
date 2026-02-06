@@ -3,12 +3,17 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
+    "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "YouTubeから動画を検索・ダウンロードし、編集できるElectronツール",
   "devDependencies": {
     "electron": "^40.2.1"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.4",
+    "googleapis": "^171.4.0"
   }
 }
