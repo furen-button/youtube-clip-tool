@@ -32,9 +32,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveMetadata: (metadata, fileName) =>
     ipcRenderer.invoke('save-metadata', metadata, fileName),
   
+  // 動画を書き出し
+  exportVideo: (inputPath, outputFileName, startTime, endTime) =>
+    ipcRenderer.invoke('export-video', inputPath, outputFileName, startTime, endTime),
+  
   // ダウンロード進捗の監視
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, progress) => callback(progress));
+  },
+  
+  // エクスポート進捗の監視
+  onExportProgress: (callback) => {
+    ipcRenderer.on('export-progress', (event, progress) => callback(progress));
   },
   
   // ダウンロード進捗リスナーの削除

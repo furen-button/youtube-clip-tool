@@ -54,6 +54,7 @@ const generateRubyBtn = document.getElementById('generateRubyBtn');
 const generateClipUrlBtn = document.getElementById('generateClipUrlBtn');
 const saveMetadataBtn = document.getElementById('saveMetadataBtn');
 const clearMetadataBtn = document.getElementById('clearMetadataBtn');
+const exportVideoBtn = document.getElementById('exportVideoBtn');
 
 // WaveSurferインスタンス
 let wavesurfer = null;
@@ -1024,6 +1025,57 @@ saveMetadataBtn.addEventListener('click', async () => {
   } catch (error) {
     console.error('保存エラー:', error);
     showToast(`保存に失敗しました: ${error.message}`, 'error');
+  }
+});
+
+// 動画を書き出し（FFmpeg）
+exportVideoBtn.addEventListener('click', async () => {
+  // 動画が読み込まれているか確認
+  if (!currentVideoFile || !currentVideoFile.path) {
+    showToast('動画を読み込んでください', 'warning');
+    return;
+  }
+  
+  // トリミング範囲が設定されているか確認
+  if (!videoPlayer.duration || trimState.duration <= 0) {
+    showToast('トリミング範囲を設定してください', 'warning');
+    return;
+  }
+  
+  // ファイル名が設定されているか確認
+  const fileName = fileNameInput.value.trim() || metadata.fileName;
+  if (!fileName) {
+    showToast('ファイル名を入力してください', 'warning');
+    return;
+  }
+  
+  try {
+    // ボタンを無効化
+    exportVideoBtn.disabled = true;
+    exportVideoBtn.textContent = '書き出し中...';
+    
+    showToast('動画の書き出しを開始しました', 'info');
+    
+    // FFmpegで動画を書き出し
+    const result = await window.electronAPI.exportVideo(
+      currentVideoFile.path,
+      fileName,
+      trimState.startTime,
+      trimState.endTime
+    );
+    
+    if (result.success) {
+      showToast(`動画を書き出しました\n保存先: ${result.outputPath}`, 'success', 5000);
+    } else {
+      showToast(`書き出しに失敗しました: ${result.error}`, 'error');
+    }
+  } catch (error) {
+    console.error('書き出しエラー:', error);
+    showToast(`書き出しに失敗しました: ${error.message}`, 'error');
+  } finally {
+    // ボタンを有効化
+    exportVideoBtn.disabled = false;
+    exportVideoBtn.textContent = '動画を書き出し (MP4)';
   }
 });
 

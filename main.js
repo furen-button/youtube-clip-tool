@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const YouTubeDownloader = require('./src/youtube-downloader');
 
 let mainWindow;
@@ -150,6 +151,68 @@ ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
     fs.writeFileSync(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
     
     return { success: true, filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// FFmpegで動画をトリミングして書き出し
+ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTime, endTime) => {
+  try {
+    // output/movies ディレクトリを作成
+    const outputDir = path.join(__dirname, 'output', 'movies');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    // 出力ファイルパス
+    const safeFileName = outputFileName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const outputPath = path.join(outputDir, `${safeFileName}.mp4`);
+    
+    // 入力ファイルの存在確認
+    if (!fs.existsSync(inputPath)) {
+      throw new Error('入力ファイルが見つかりません');
+    }
+    
+    // FFmpegコマンドを実行
+    // -ss: 開始時間, -to: 終了時間, -i: 入力ファイル, -c: コーデック(copy=再エンコードなし)
+    const duration = endTime - startTime;
+    const ffmpegArgs = [
+      '-ss', startTime.toString(),
+      '-t', duration.toString(),
+      '-i', inputPath,
+      '-c', 'copy',
+      '-avoid_negative_ts', '1',
+      '-y', // 上書き確認なし
+      outputPath
+    ];
+    
+    return new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      
+      let stderr = '';
+      
+      ffmpeg.stderr.on('data', (data) => {
+        stderr += data.toString();
+        // 進捗情報をレンダラーに送信（オプション）
+        const progressMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
+        if (progressMatch && mainWindow) {
+          mainWindow.webContents.send('export-progress', progressMatch[1]);
+        }
+      });
+      
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve({ success: true, outputPath });
+        } else {
+          reject(new Error(`FFmpeg exited with code ${code}\n${stderr}`));
+        }
+      });
+      
+      ffmpeg.on('error', (error) => {
+        reject(new Error(`FFmpeg error: ${error.message}`));
+      });
+    });
   } catch (error) {
     return { success: false, error: error.message };
   }
