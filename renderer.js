@@ -463,6 +463,9 @@ function updateTrimDisplay() {
   
   // ハイライト表示を更新
   updateRangeHighlight();
+  
+  // ファイル名を自動更新
+  autoGenerateFileName();
 }
 
 // 範囲ハイライトの表示を更新
@@ -861,7 +864,26 @@ function updateSelectedCategories() {
   });
 }
 
-// ファイル名の自動生成
+// ファイル名の自動生成関数
+function autoGenerateFileName() {
+  const videoId = videoIdInput.value.trim();
+  
+  if (!videoId || !videoPlayer.duration) {
+    return;
+  }
+  
+  // フォーマット: videoId_startTime-endTime（秒は6桁0詰め）
+  const startSec = Math.floor(trimState.startTime);
+  const endSec = Math.floor(trimState.endTime);
+  const startSecPadded = String(startSec).padStart(6, '0');
+  const endSecPadded = String(endSec).padStart(6, '0');
+  const fileName = `${videoId}_${startSecPadded}-${endSecPadded}`;
+  
+  fileNameInput.value = fileName;
+  metadata.fileName = fileName;
+}
+
+// ファイル名の自動生成ボタン
 generateFileNameBtn.addEventListener('click', () => {
   const videoId = videoIdInput.value.trim();
   
@@ -875,13 +897,7 @@ generateFileNameBtn.addEventListener('click', () => {
     return;
   }
   
-  // フォーマット: videoId_startTime-endTime
-  const startSec = Math.floor(trimState.startTime);
-  const endSec = Math.floor(trimState.endTime);
-  const fileName = `${videoId}_${startSec}-${endSec}`;
-  
-  fileNameInput.value = fileName;
-  metadata.fileName = fileName;
+  autoGenerateFileName();
 });
 
 // ルビの自動生成（簡易版：ひらがな変換APIを使わず、そのまま表示）
@@ -993,7 +1009,10 @@ clearMetadataBtn.addEventListener('click', () => {
 });
 
 // 入力フィールドの変更を監視
-videoIdInput.addEventListener('input', (e) => metadata.videoId = e.target.value.trim());
+videoIdInput.addEventListener('input', (e) => {
+  metadata.videoId = e.target.value.trim();
+  autoGenerateFileName();
+});
 fileNameInput.addEventListener('input', (e) => metadata.fileName = e.target.value.trim());
 serifInput.addEventListener('input', (e) => metadata.serif = e.target.value.trim());
 rubyInput.addEventListener('input', (e) => metadata.ruby = e.target.value.trim());
