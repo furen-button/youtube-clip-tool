@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const YouTubeDownloader = require('./src/youtube-downloader');
 
 let mainWindow;
@@ -113,6 +114,20 @@ ipcMain.handle('select-video-file', async () => {
       return { success: true, data: result.filePaths[0] };
     }
     return { success: false, error: 'キャンセルされました' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// 動画ファイルを読み込んでバッファとして返す
+ipcMain.handle('load-video-file', async (event, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error('ファイルが見つかりません');
+    }
+    
+    const buffer = fs.readFileSync(filePath);
+    return { success: true, data: buffer };
   } catch (error) {
     return { success: false, error: error.message };
   }

@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectVideoFile: () => 
     ipcRenderer.invoke('select-video-file'),
   
+  // 動画ファイルを読み込む
+  loadVideoFile: (filePath) =>
+    ipcRenderer.invoke('load-video-file', filePath),
+  
   // ダウンロード進捗の監視
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, progress) => callback(progress));

@@ -172,7 +172,7 @@ function displayDownloadedVideos(files) {
     return;
   }
 
-  downloadedVideos.innerHTML = files.map(file => `
+  downloadedVideos.innerHTML = files.map((file, index) => `
     <div class="video-item">
       <div class="video-item-info">
         <div class="video-item-name">${escapeHtml(file.name)}</div>
@@ -182,29 +182,84 @@ function displayDownloadedVideos(files) {
         </div>
       </div>
       <div class="video-item-actions">
-        <button class="btn btn-primary" onclick="playVideo('${file.path.replace(/\\/g, '\\\\')}')">
+        <button class="btn btn-primary" onclick="playVideo(${index})">
           再生
         </button>
       </div>
     </div>
   `).join('');
+  
+  // ファイル情報を保存（再生時に使用）
+  window.downloadedFilesList = files;
 }
 
 /**
  * 動画を再生
  */
-function playVideo(filePath) {
-  videoPlayer.src = `file://${filePath}`;
-  previewSection.style.display = 'block';
-  previewSection.scrollIntoView({ behavior: 'smooth' });
+async function playVideo(fileIndex) {
+  if (!window.downloadedFilesList || !window.downloadedFilesList[fileIndex]) {
+    console.error('ファイルが見つかりません');
+    return;
+  }
   
-  videoPlayer.onloadedmetadata = () => {
+  const file = window.downloadedFilesList[fileIndex];
+  const filePath = file.path;
+  
+  // デバッグ情報
+  console.log('Loading video:', filePath);
+  
+  try {
+    // IPCを使ってファイルを読み込む
+    const result = await window.electronAPI.loadVideoFile(filePath);
+    
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    
+    // バッファをBlobに変換
+    const blob = new Blob([result.data], { type: 'video/mp4' });
+    const url = URL.createObjectURL(blob);
+    
+    // 既存のObject URLがあれば解放
+    if (videoPlayer.src && videoPlayer.src.startsWith('blob:')) {
+      URL.revokeObjectURL(videoPlayer.src);
+    }
+    
+    videoPlayer.src = url;
+    previewSection.style.display = 'block';
+    previewSection.scrollIntoView({ behavior: 'smooth' });
+    
+    videoPlayer.onerror = (e) => {
+      console.error('動画の読み込みに失敗しました:', e);
+      console.error('Video error code:', videoPlayer.error ? videoPlayer.error.code : 'unknown');
+      console.error('Video error message:', videoPlayer.error ? videoPlayer.error.message : 'unknown');
+      videoInfo.innerHTML = `
+        <p style="color: red;">動画の読み込みに失敗しました</p>
+        <p><strong>ファイル:</strong> ${escapeHtml(file.name)}</p>
+        <p><strong>パス:</strong> ${escapeHtml(filePath)}</p>
+        <p><strong>エラーコード:</strong> ${videoPlayer.error ? videoPlayer.error.code : 'unknown'}</p>
+        <p>ファイルが存在するか、形式がサポートされているか確認してください。</p>
+      `;
+    };
+    
+    videoPlayer.onloadedmetadata = () => {
+      console.log('Video loaded successfully');
+      videoInfo.innerHTML = `
+        <p><strong>ファイル:</strong> ${escapeHtml(file.name)}</p>
+        <p><strong>再生時間:</strong> ${formatDuration(videoPlayer.duration)}</p>
+        <p><strong>解像度:</strong> ${videoPlayer.videoWidth} × ${videoPlayer.videoHeight}</p>
+      `;
+    };
+  } catch (error) {
+    console.error('動画の読み込みエラー:', error);
     videoInfo.innerHTML = `
-      <p><strong>ファイル:</strong> ${filePath}</p>
-      <p><strong>再生時間:</strong> ${formatDuration(videoPlayer.duration)}</p>
-      <p><strong>解像度:</strong> ${videoPlayer.videoWidth} × ${videoPlayer.videoHeight}</p>
+      <p style="color: red;">動画の読み込みに失敗しました</p>
+      <p><strong>ファイル:</strong> ${escapeHtml(file.name)}</p>
+      <p><strong>パス:</strong> ${escapeHtml(filePath)}</p>
+      <p><strong>エラー:</strong> ${escapeHtml(error.message)}</p>
     `;
-  };
+    previewSection.style.display = 'block';
+  }
 }
 
 /**

@@ -11,7 +11,8 @@ const execAsync = promisify(exec);
  */
 class YouTubeDownloader {
   constructor(downloadDir = './downloads') {
-    this.downloadDir = downloadDir;
+    // 相対パスを絶対パスに変換
+    this.downloadDir = path.resolve(downloadDir);
     this.ensureDownloadDir();
   }
 
