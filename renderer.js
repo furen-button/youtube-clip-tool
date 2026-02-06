@@ -84,6 +84,60 @@ let metadata = {
 let currentVideoFile = null;
 
 /**
+ * トースト通知を表示
+ */
+function showToast(message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  // アイコンを設定
+  const icons = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+  };
+  
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <div class="toast-content">
+      <div class="toast-message">${escapeHtml(message)}</div>
+    </div>
+    <button class="toast-close">×</button>
+  `;
+  
+  container.appendChild(toast);
+  
+  // 閉じるボタンのイベント
+  const closeBtn = toast.querySelector('.toast-close');
+  closeBtn.addEventListener('click', () => {
+    removeToast(toast);
+  });
+  
+  // 自動で閉じる
+  if (duration > 0) {
+    setTimeout(() => {
+      removeToast(toast);
+    }, duration);
+  }
+  
+  return toast;
+}
+
+/**
+ * トーストを削除
+ */
+function removeToast(toast) {
+  toast.classList.add('removing');
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 300);
+}
+
+/**
  * YouTube動画を検索
  */
 async function searchVideos() {
@@ -553,7 +607,7 @@ setStartBtn.addEventListener('click', () => {
     startSlider.value = percentage;
     updateTrimDisplay();
   } else {
-    alert('開始位置は終了位置より前に設定してください');
+    showToast('開始位置は終了位置より前に設定してください', 'warning');
   }
 });
 
@@ -569,7 +623,7 @@ setEndBtn.addEventListener('click', () => {
     endSlider.value = percentage;
     updateTrimDisplay();
   } else {
-    alert('終了位置は開始位置より後に設定してください');
+    showToast('終了位置は開始位置より後に設定してください', 'warning');
   }
 });
 
@@ -729,7 +783,7 @@ function updateWaveformRegion() {
 // 波形表示を切り替え
 function toggleWaveform() {
   if (!videoPlayer.src) {
-    alert('動画を選択してください');
+    showToast('動画を選択してください', 'warning');
     return;
   }
 
@@ -786,7 +840,7 @@ toggleWaveformBtn.addEventListener('click', toggleWaveform);
 // トリミング範囲にズーム
 zoomToTrimBtn.addEventListener('click', () => {
   if (!wavesurfer || !videoPlayer.duration) {
-    alert('動画と波形を読み込んでください');
+    showToast('動画と波形を読み込んでください', 'warning');
     return;
   }
   updateWaveformZoom();
@@ -795,7 +849,7 @@ zoomToTrimBtn.addEventListener('click', () => {
 // ズームをリセット
 resetZoomBtn.addEventListener('click', () => {
   if (!wavesurfer) {
-    alert('波形を表示してください');
+    showToast('波形を表示してください', 'warning');
     return;
   }
   
@@ -888,12 +942,12 @@ generateFileNameBtn.addEventListener('click', () => {
   const videoId = videoIdInput.value.trim();
   
   if (!videoId) {
-    alert('Video IDを入力してください');
+    showToast('Video IDを入力してください', 'warning');
     return;
   }
   
   if (!videoPlayer.duration) {
-    alert('動画を読み込んでください');
+    showToast('動画を読み込んでください', 'warning');
     return;
   }
   
@@ -905,13 +959,13 @@ generateRubyBtn.addEventListener('click', () => {
   const serif = serifInput.value.trim();
   
   if (!serif) {
-    alert('セリフを入力してください');
+    showToast('セリフを入力してください', 'warning');
     return;
   }
   
   // 実際のアプリケーションでは、ひらがな変換APIを使用
-  // ここでは簡易的にアラートを表示
-  alert('ルビの自動生成機能は将来実装予定です。\n現在は手動でひらがなを入力してください。');
+  // ここでは簡易的にトーストを表示
+  showToast('ルビの自動生成機能は将来実装予定です。\n現在は手動でひらがなを入力してください。', 'info', 5000);
 });
 
 // クリップURLの自動生成
@@ -919,12 +973,12 @@ generateClipUrlBtn.addEventListener('click', () => {
   const videoId = videoIdInput.value.trim();
   
   if (!videoId) {
-    alert('Video IDを入力してください');
+    showToast('Video IDを入力してください', 'warning');
     return;
   }
   
   if (!videoPlayer.duration) {
-    alert('動画を読み込んでください');
+    showToast('動画を読み込んでください', 'warning');
     return;
   }
   
@@ -963,13 +1017,13 @@ saveMetadataBtn.addEventListener('click', async () => {
     const result = await window.electronAPI.saveMetadata(saveData, metadata.fileName || 'metadata');
     
     if (result.success) {
-      alert(`メタデータを保存しました\n保存先: ${result.filePath}`);
+      showToast(`メタデータを保存しました\n保存先: ${result.filePath}`, 'success', 5000);
     } else {
-      alert(`保存に失敗しました: ${result.error}`);
+      showToast(`保存に失敗しました: ${result.error}`, 'error');
     }
   } catch (error) {
     console.error('保存エラー:', error);
-    alert(`保存に失敗しました: ${error.message}`);
+    showToast(`保存に失敗しました: ${error.message}`, 'error');
   }
 });
 
@@ -1005,7 +1059,7 @@ clearMetadataBtn.addEventListener('click', () => {
     memo: ''
   };
   
-  alert('メタデータをクリアしました');
+  showToast('メタデータをクリアしました', 'success');
 });
 
 // 入力フィールドの変更を監視
