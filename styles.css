@@ -352,6 +352,74 @@ section h2 {
   }
 }
 
+/* 音声波形表示 */
+.waveform-section {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+}
+
+.waveform-section h3 {
+  font-size: 1.3rem;
+  color: #667eea;
+  margin-bottom: 15px;
+}
+
+.waveform-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #4a5568;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.waveform-container {
+  width: 100%;
+  min-height: 128px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  position: relative;
+}
+
+.waveform-loading {
+  padding: 40px;
+  text-align: center;
+  color: #718096;
+  font-size: 1.1rem;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.waveform-loading::after {
+  content: '...';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+/* WaveSurferのカスタマイズ */
+#waveform wave {
+  cursor: pointer !important;
+}
+
 /* トリミング機能 */
 .trimming-section {
   margin-top: 30px;

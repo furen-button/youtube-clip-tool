@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Clip Tool</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- WaveSurfer.js CDN -->
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
 </head>
 <body>
   <div class="container">
@@ -65,6 +67,22 @@
         <h2>動画プレビュー</h2>
         <video id="videoPlayer" controls class="video-player"></video>
         <div class="video-info" id="videoInfo"></div>
+        
+        <!-- 音声波形表示 -->
+        <div class="waveform-section" id="waveformSection">
+          <h3>音声波形</h3>
+          <div class="waveform-controls">
+            <button id="toggleWaveformBtn" class="btn btn-secondary">波形を表示</button>
+            <label class="checkbox-label">
+              <input type="checkbox" id="normalizeCheckbox">
+              <span>正規化 (Normalize)</span>
+            </label>
+          </div>
+          <div id="waveform" class="waveform-container"></div>
+          <div id="waveformLoading" class="waveform-loading" style="display: none;">
+            波形を生成中...
+          </div>
+        </div>
         
         <!-- トリミングコントロール -->
         <div class="trimming-section" id="trimmingSection">

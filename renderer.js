@@ -2,6 +2,8 @@
  * レンダラープロセス - UIロジック
  */
 
+// WaveSurfer.jsはCDN経由で読み込まれ、グローバル変数として使用可能
+
 // DOM要素の取得
 const searchQuery = document.getElementById('searchQuery');
 const searchBtn = document.getElementById('searchBtn');
@@ -18,6 +20,12 @@ const videoPlayer = document.getElementById('videoPlayer');
 const previewSection = document.getElementById('previewSection');
 const videoInfo = document.getElementById('videoInfo');
 
+// 波形表示関連の要素
+const waveformContainer = document.getElementById('waveform');
+const waveformLoading = document.getElementById('waveformLoading');
+const toggleWaveformBtn = document.getElementById('toggleWaveformBtn');
+const normalizeCheckbox = document.getElementById('normalizeCheckbox');
+
 // トリミング関連の要素
 const startSlider = document.getElementById('startSlider');
 const endSlider = document.getElementById('endSlider');
@@ -29,6 +37,10 @@ const setStartBtn = document.getElementById('setStartBtn');
 const setEndBtn = document.getElementById('setEndBtn');
 const playTrimmedBtn = document.getElementById('playTrimmedBtn');
 const resetTrimBtn = document.getElementById('resetTrimBtn');
+
+// WaveSurferインスタンス
+let wavesurfer = null;
+let waveformVisible = false;
 
 // トリミング状態
 let trimState = {
@@ -512,3 +524,124 @@ videoPlayer.addEventListener('pause', () => {
 videoPlayer.addEventListener('loadedmetadata', () => {
   initTrimSliders();
 });
+
+/**
+ * WaveSurfer - 音声波形表示機能
+ */
+
+// WaveSurferを初期化
+function initWaveSurfer() {
+  if (wavesurfer) {
+    wavesurfer.destroy();
+  }
+
+  wavesurfer = WaveSurfer.create({
+    container: waveformContainer,
+    waveColor: '#667eea',
+    progressColor: '#764ba2',
+    cursorColor: '#e53e3e',
+    barWidth: 2,
+    barRadius: 3,
+    cursorWidth: 2,
+    height: 128,
+    barGap: 2,
+    normalize: normalizeCheckbox.checked,
+    responsive: true,
+    backend: 'MediaElement',
+    media: videoPlayer,
+    autoplay: false,
+    interact: true
+  });
+
+  // 波形がロードされたら
+  wavesurfer.on('ready', () => {
+    waveformLoading.style.display = 'none';
+    console.log('WaveSurfer ready');
+  });
+
+  // 波形クリックで再生位置を変更して再生
+  wavesurfer.on('click', (relativeX) => {
+    // relativeXは0-1の範囲の相対位置
+    const newTime = relativeX * videoPlayer.duration;
+    console.log('Waveform clicked at:', newTime);
+    videoPlayer.currentTime = newTime;
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    }
+  });
+  
+  // interactionイベント
+  wavesurfer.on('interaction', (newTime) => {
+    console.log('Waveform interaction at:', newTime);
+    videoPlayer.currentTime = newTime;
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    }
+  });
+
+  // エラーハンドリング
+  wavesurfer.on('error', (error) => {
+    console.error('WaveSurfer error:', error);
+    waveformLoading.style.display = 'none';
+    waveformLoading.textContent = '波形の生成に失敗しました';
+  });
+
+  return wavesurfer;
+}
+
+// 波形上のトリミング範囲を更新（将来の拡張用）
+function updateWaveformRegion() {
+  // Regionsプラグインを使用する場合はここで実装
+  // 現時点では未実装
+}
+
+// 波形表示を切り替え
+function toggleWaveform() {
+  if (!videoPlayer.src) {
+    alert('動画を選択してください');
+    return;
+  }
+
+  waveformVisible = !waveformVisible;
+
+  if (waveformVisible) {
+    // 波形を表示
+    waveformContainer.style.display = 'block';
+    waveformLoading.style.display = 'block';
+    waveformLoading.textContent = '波形を生成中...';
+    toggleWaveformBtn.textContent = '波形を非表示';
+
+    try {
+      // video要素を使用してWaveSurferを初期化
+      // media: videoPlayerを設定しているので、loadは不要
+      initWaveSurfer();
+    } catch (error) {
+      console.error('波形の読み込みエラー:', error);
+      waveformLoading.textContent = '波形の生成に失敗しました';
+    }
+  } else {
+    // 波形を非表示
+    waveformContainer.style.display = 'none';
+    waveformLoading.style.display = 'none';
+    toggleWaveformBtn.textContent = '波形を表示';
+    if (wavesurfer) {
+      wavesurfer.destroy();
+      wavesurfer = null;
+    }
+  }
+}
+
+// 正規化チェックボックスの変更
+normalizeCheckbox.addEventListener('change', () => {
+  if (wavesurfer && waveformVisible) {
+    // 波形を再生成
+    toggleWaveform().then(() => {
+      if (waveformVisible) {
+        setTimeout(() => toggleWaveform(), 100);
+      }
+    });
+  }
+});
+
+// 波形表示ボタンのクリック
+toggleWaveformBtn.addEventListener('click', toggleWaveform);
