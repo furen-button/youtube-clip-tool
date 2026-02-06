@@ -758,6 +758,41 @@ section h2 {
   flex: 1;
 }
 
+/* 微調整ボタン */
+.fine-tune-controls {
+  display: flex;
+  gap: 20px;
+  margin-top: 15px;
+  padding: 15px;
+  background: #f7fafc;
+  border-radius: 8px;
+}
+
+.fine-tune-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fine-tune-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.fine-tune-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.fine-tune-buttons .btn {
+  flex: 1;
+  min-width: 50px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .time-display {
     grid-template-columns: 1fr;
@@ -769,6 +804,10 @@ section h2 {
   
   .trimming-actions .btn {
     width: 100%;
+  }
+
+  .fine-tune-controls {
+    flex-direction: column;
   }
 
   .input-with-button {

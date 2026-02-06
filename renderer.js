@@ -647,6 +647,71 @@ resetTrimBtn.addEventListener('click', () => {
   updateTrimDisplay();
 });
 
+/**
+ * トリミング範囲の微調整機能
+ */
+
+// フレームレート（通常30fps、60fpsなどの動画にも対応）
+const DEFAULT_FRAME_RATE = 30;
+
+// フレーム数から秒数に変換
+function framesToSeconds(frames, frameRate = DEFAULT_FRAME_RATE) {
+  return frames / frameRate;
+}
+
+// 開始位置の微調整
+document.getElementById('startMinus15FrameBtn').addEventListener('click', () => adjustStartTime(-15));
+document.getElementById('startMinus1FrameBtn').addEventListener('click', () => adjustStartTime(-1));
+document.getElementById('startPlus1FrameBtn').addEventListener('click', () => adjustStartTime(1));
+document.getElementById('startPlus15FrameBtn').addEventListener('click', () => adjustStartTime(15));
+
+// 終了位置の微調整
+document.getElementById('endMinus15FrameBtn').addEventListener('click', () => adjustEndTime(-15));
+document.getElementById('endMinus1FrameBtn').addEventListener('click', () => adjustEndTime(-1));
+document.getElementById('endPlus1FrameBtn').addEventListener('click', () => adjustEndTime(1));
+document.getElementById('endPlus15FrameBtn').addEventListener('click', () => adjustEndTime(15));
+
+// 開始位置を調整
+function adjustStartTime(frames) {
+  if (!videoPlayer.duration) return;
+  
+  const adjustSeconds = framesToSeconds(frames);
+  let newStartTime = trimState.startTime + adjustSeconds;
+  
+  // 範囲チェック
+  newStartTime = Math.max(0, Math.min(newStartTime, trimState.endTime - 0.1));
+  
+  // スライダーを更新
+  const percentage = (newStartTime / videoPlayer.duration) * 100;
+  startSlider.value = percentage;
+  updateTrimDisplay();
+  
+  // 開始位置から再生
+  videoPlayer.currentTime = trimState.startTime;
+  videoPlayer.play().catch(e => console.error('再生エラー:', e));
+}
+
+// 終了位置を調整
+function adjustEndTime(frames) {
+  if (!videoPlayer.duration) return;
+  
+  const adjustSeconds = framesToSeconds(frames);
+  let newEndTime = trimState.endTime + adjustSeconds;
+  
+  // 範囲チェック
+  newEndTime = Math.max(trimState.startTime + 0.1, Math.min(newEndTime, videoPlayer.duration));
+  
+  // スライダーを更新
+  const percentage = (newEndTime / videoPlayer.duration) * 100;
+  endSlider.value = percentage;
+  updateTrimDisplay();
+  
+  // 終了位置の2秒前から再生
+  const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
+  videoPlayer.currentTime = playbackTime;
+  videoPlayer.play().catch(e => console.error('再生エラー:', e));
+}
+
 // 動画の再生位置を監視してトリミング範囲でループ
 videoPlayer.addEventListener('timeupdate', () => {
   if (trimState.isLooping && videoPlayer.currentTime >= trimState.endTime) {
