@@ -86,6 +86,34 @@ let metadata = {
 let currentVideoFile = null;
 
 /**
+ * タブ切り替え機能
+ */
+function switchTab(tabName) {
+  // 全てのタブボタンとコンテンツの active クラスを削除
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  
+  // 選択されたタブをアクティブに
+  const selectedButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+  const selectedContent = document.getElementById(`${tabName}Tab`);
+  
+  if (selectedButton) selectedButton.classList.add('active');
+  if (selectedContent) selectedContent.classList.add('active');
+}
+
+// タブボタンのイベントリスナーを設定
+document.querySelectorAll('.tab-button').forEach(button => {
+  button.addEventListener('click', () => {
+    const tabName = button.dataset.tab;
+    switchTab(tabName);
+  });
+});
+
+/**
  * トースト通知を表示
  */
 function showToast(message, type = 'info', duration = 3000) {
@@ -362,6 +390,12 @@ async function playVideo(fileIndex) {
     
     videoPlayer.src = url;
     previewSection.style.display = 'block';
+    videoPlayer.style.display = 'block';
+    document.getElementById('editTabMessage').style.display = 'none';
+    
+    // 編集タブに自動切り替え
+    switchTab('edit');
+    
     previewSection.scrollIntoView({ behavior: 'smooth' });
     
     videoPlayer.onerror = (e) => {
@@ -384,6 +418,10 @@ async function playVideo(fileIndex) {
         <p><strong>再生時間:</strong> ${formatDuration(videoPlayer.duration)}</p>
         <p><strong>解像度:</strong> ${videoPlayer.videoWidth} × ${videoPlayer.videoHeight}</p>
       `;
+      
+      // Video IDから自動生成
+      autoGenerateFileName();
+      autoGenerateClipUrl();
     };
   } catch (error) {
     console.error('動画の読み込みエラー:', error);
@@ -522,6 +560,9 @@ function updateTrimDisplay() {
   
   // ファイル名を自動更新
   autoGenerateFileName();
+  
+  // クリップURLを自動更新
+  autoGenerateClipUrl();
 }
 
 // 範囲ハイライトの表示を更新
@@ -1010,6 +1051,22 @@ function autoGenerateFileName() {
   metadata.fileName = fileName;
 }
 
+// クリップURLの自動生成関数
+function autoGenerateClipUrl() {
+  const videoId = videoIdInput.value.trim();
+  
+  if (!videoId || !videoPlayer.duration) {
+    return;
+  }
+  
+  // YouTube URL with timestamp
+  const startSec = Math.floor(trimState.startTime);
+  const clipUrl = `https://youtube.com/watch?v=${videoId}&t=${startSec}s`;
+  
+  clipUrlInput.value = clipUrl;
+  metadata.clipUrl = clipUrl;
+}
+
 // ファイル名の自動生成ボタン
 generateFileNameBtn.addEventListener('click', () => {
   const videoId = videoIdInput.value.trim();
@@ -1041,26 +1098,12 @@ generateRubyBtn.addEventListener('click', () => {
   showToast('ルビの自動生成機能は将来実装予定です。\n現在は手動でひらがなを入力してください。', 'info', 5000);
 });
 
-// クリップURLの自動生成
+// クリップURLの自動生成ボタン（互換性のため残す）
 generateClipUrlBtn.addEventListener('click', () => {
-  const videoId = videoIdInput.value.trim();
-  
-  if (!videoId) {
-    showToast('Video IDを入力してください', 'warning');
-    return;
+  autoGenerateClipUrl();
+  if (!metadata.clipUrl) {
+    showToast('Video IDを入力し、動画を読み込んでください', 'warning');
   }
-  
-  if (!videoPlayer.duration) {
-    showToast('動画を読み込んでください', 'warning');
-    return;
-  }
-  
-  // YouTube URL with timestamp
-  const startSec = Math.floor(trimState.startTime);
-  const clipUrl = `https://youtube.com/watch?v=${videoId}&t=${startSec}s`;
-  
-  clipUrlInput.value = clipUrl;
-  metadata.clipUrl = clipUrl;
 });
 
 // メタデータの保存（JSON）
@@ -1190,6 +1233,7 @@ clearMetadataBtn.addEventListener('click', () => {
 videoIdInput.addEventListener('input', (e) => {
   metadata.videoId = e.target.value.trim();
   autoGenerateFileName();
+  autoGenerateClipUrl();
 });
 fileNameInput.addEventListener('input', (e) => metadata.fileName = e.target.value.trim());
 serifInput.addEventListener('input', (e) => metadata.serif = e.target.value.trim());

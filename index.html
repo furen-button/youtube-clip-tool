@@ -16,9 +16,27 @@
       <p>YouTube動画を検索・ダウンロードして編集できるツール</p>
     </header>
 
+    <!-- タブナビゲーション -->
+    <div class="tab-navigation">
+      <button class="tab-button active" data-tab="downloaded">ダウンロード済み動画選択</button>
+      <button class="tab-button" data-tab="search">YouTube動画を検索・ダウンロード</button>
+      <button class="tab-button" data-tab="edit">動画編集</button>
+    </div>
+
     <main>
-      <!-- YouTube検索セクション -->
-      <section class="search-section">
+      <!-- タブ1: ダウンロード済み動画選択 -->
+      <div class="tab-content active" id="downloadedTab">
+        <section class="downloaded-section">
+          <h2>ダウンロード済み動画</h2>
+          <button id="refreshBtn" class="btn btn-secondary">更新</button>
+          <div id="downloadedVideos" class="video-list"></div>
+        </section>
+      </div>
+
+      <!-- タブ2: YouTube検索・ダウンロード -->
+      <div class="tab-content" id="searchTab">
+        <!-- YouTube検索セクション -->
+        <section class="search-section">
         <h2>YouTube動画を検索</h2>
         <div class="search-bar">
           <input 
@@ -55,19 +73,18 @@
         
         <div id="downloadStatus" class="status-message"></div>
       </section>
+      </div>
 
-      <!-- ダウンロード済み動画セクション -->
-      <section class="downloaded-section">
-        <h2>ダウンロード済み動画</h2>
-        <button id="refreshBtn" class="btn btn-secondary">更新</button>
-        <div id="downloadedVideos" class="video-list"></div>
-      </section>
-
-      <!-- 動画プレビューセクション -->
-      <section class="preview-section" id="previewSection" style="display: none;">
-        <h2>動画プレビュー</h2>
-        <video id="videoPlayer" controls class="video-player"></video>
-        <div class="video-info" id="videoInfo"></div>
+      <!-- タブ3: 動画編集 -->
+      <div class="tab-content" id="editTab">
+        <!-- 動画プレビューセクション -->
+        <section class="preview-section" id="previewSection">
+          <h2>動画プレビュー</h2>
+          <div id="editTabMessage" class="info-message">
+            左の「ダウンロード済み動画選択」タブから動画を選択してください
+          </div>
+          <video id="videoPlayer" controls class="video-player" style="display: none;"></video>
+          <div class="video-info" id="videoInfo"></div>
         
         <!-- 音声波形表示 -->
         <div class="waveform-section" id="waveformSection">
@@ -235,7 +252,8 @@
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
     </main>
   </div>
 
