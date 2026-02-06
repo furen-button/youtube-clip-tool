@@ -730,7 +730,6 @@ function initWaveSurfer() {
   wavesurfer.on('click', (relativeX) => {
     // relativeXは0-1の範囲の相対位置
     const newTime = relativeX * videoPlayer.duration;
-    console.log('Waveform clicked at:', newTime);
     videoPlayer.currentTime = newTime;
     if (videoPlayer.paused) {
       videoPlayer.play().catch(e => console.error('再生エラー:', e));
@@ -739,7 +738,6 @@ function initWaveSurfer() {
   
   // interactionイベント
   wavesurfer.on('interaction', (newTime) => {
-    console.log('Waveform interaction at:', newTime);
     videoPlayer.currentTime = newTime;
     if (videoPlayer.paused) {
       videoPlayer.play().catch(e => console.error('再生エラー:', e));
@@ -748,7 +746,6 @@ function initWaveSurfer() {
 
   // エラーハンドリング
   wavesurfer.on('error', (error) => {
-    console.error('WaveSurfer error:', error);
     waveformLoading.style.display = 'none';
     waveformLoading.textContent = '波形の生成に失敗しました';
   });
