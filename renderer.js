@@ -39,6 +39,7 @@ const setStartBtn = document.getElementById('setStartBtn');
 const setEndBtn = document.getElementById('setEndBtn');
 const playTrimmedBtn = document.getElementById('playTrimmedBtn');
 const resetTrimBtn = document.getElementById('resetTrimBtn');
+const loopCheckbox = document.getElementById('loopCheckbox');
 
 // メタデータ関連の要素
 const videoIdInput = document.getElementById('videoId');
@@ -67,7 +68,7 @@ let trimState = {
   startTime: 0,
   endTime: 0,
   duration: 0,
-  isLooping: false
+  isLooping: true
 };
 
 // メタデータ状態
@@ -634,7 +635,13 @@ playTrimmedBtn.addEventListener('click', () => {
   
   videoPlayer.currentTime = trimState.startTime;
   videoPlayer.play();
-  trimState.isLooping = true;
+  // チェックボックスの状態に合わせる
+  trimState.isLooping = loopCheckbox.checked;
+});
+
+// ループ再生チェックボックスの変更
+loopCheckbox.addEventListener('change', () => {
+  trimState.isLooping = loopCheckbox.checked;
 });
 
 // トリミング設定をリセット
@@ -643,7 +650,8 @@ resetTrimBtn.addEventListener('click', () => {
   
   startSlider.value = 0;
   endSlider.value = 100;
-  trimState.isLooping = false;
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
   updateTrimDisplay();
 });
 
@@ -722,6 +730,7 @@ videoPlayer.addEventListener('timeupdate', () => {
 // 動画が一時停止したらループを停止
 videoPlayer.addEventListener('pause', () => {
   trimState.isLooping = false;
+  loopCheckbox.checked = false;
 });
 
 // 動画のメタデータが読み込まれたらトリミングスライダーを初期化
