@@ -18,6 +18,26 @@ const videoPlayer = document.getElementById('videoPlayer');
 const previewSection = document.getElementById('previewSection');
 const videoInfo = document.getElementById('videoInfo');
 
+// トリミング関連の要素
+const startSlider = document.getElementById('startSlider');
+const endSlider = document.getElementById('endSlider');
+const startTimeDisplay = document.getElementById('startTimeDisplay');
+const endTimeDisplay = document.getElementById('endTimeDisplay');
+const durationDisplay = document.getElementById('durationDisplay');
+const rangeHighlight = document.getElementById('rangeHighlight');
+const setStartBtn = document.getElementById('setStartBtn');
+const setEndBtn = document.getElementById('setEndBtn');
+const playTrimmedBtn = document.getElementById('playTrimmedBtn');
+const resetTrimBtn = document.getElementById('resetTrimBtn');
+
+// トリミング状態
+let trimState = {
+  startTime: 0,
+  endTime: 0,
+  duration: 0,
+  isLooping: false
+};
+
 /**
  * YouTube動画を検索
  */
@@ -353,4 +373,142 @@ refreshBtn.addEventListener('click', loadDownloadedVideos);
 // 初期読み込み
 window.addEventListener('DOMContentLoaded', () => {
   loadDownloadedVideos();
+});
+
+/**
+ * トリミング機能
+ */
+
+// 時間を「分:秒.ミリ秒」形式にフォーマット
+function formatTimeWithMillis(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00.000';
+  
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  const millis = Math.floor((seconds % 1) * 1000);
+  
+  return `${minutes}:${String(secs).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+}
+
+// トリミング時間表示を更新
+function updateTrimDisplay() {
+  const videoDuration = videoPlayer.duration || 0;
+  
+  trimState.startTime = (startSlider.value / 100) * videoDuration;
+  trimState.endTime = (endSlider.value / 100) * videoDuration;
+  trimState.duration = trimState.endTime - trimState.startTime;
+  
+  startTimeDisplay.textContent = formatTimeWithMillis(trimState.startTime);
+  endTimeDisplay.textContent = formatTimeWithMillis(trimState.endTime);
+  durationDisplay.textContent = formatTimeWithMillis(trimState.duration);
+  
+  // ハイライト表示を更新
+  updateRangeHighlight();
+}
+
+// 範囲ハイライトの表示を更新
+function updateRangeHighlight() {
+  const startPercent = parseFloat(startSlider.value);
+  const endPercent = parseFloat(endSlider.value);
+  
+  rangeHighlight.style.left = `${startPercent}%`;
+  rangeHighlight.style.width = `${endPercent - startPercent}%`;
+}
+
+// トリミングスライダーの初期化
+function initTrimSliders() {
+  if (!videoPlayer.duration) return;
+  
+  const duration = videoPlayer.duration;
+  trimState.endTime = duration;
+  endSlider.value = 100;
+  startSlider.value = 0;
+  
+  updateTrimDisplay();
+}
+
+// 開始位置スライダーの変更
+startSlider.addEventListener('input', () => {
+  // 開始位置が終了位置を超えないようにする
+  if (parseFloat(startSlider.value) >= parseFloat(endSlider.value)) {
+    startSlider.value = Math.max(0, parseFloat(endSlider.value) - 0.01);
+  }
+  updateTrimDisplay();
+});
+
+// 終了位置スライダーの変更
+endSlider.addEventListener('input', () => {
+  // 終了位置が開始位置より前にならないようにする
+  if (parseFloat(endSlider.value) <= parseFloat(startSlider.value)) {
+    endSlider.value = Math.min(100, parseFloat(startSlider.value) + 0.01);
+  }
+  updateTrimDisplay();
+});
+
+// 現在位置を開始位置に設定
+setStartBtn.addEventListener('click', () => {
+  if (!videoPlayer.duration) return;
+  
+  const currentTime = videoPlayer.currentTime;
+  const percentage = (currentTime / videoPlayer.duration) * 100;
+  
+  // 終了位置より前であることを確認
+  if (percentage < parseFloat(endSlider.value)) {
+    startSlider.value = percentage;
+    updateTrimDisplay();
+  } else {
+    alert('開始位置は終了位置より前に設定してください');
+  }
+});
+
+// 現在位置を終了位置に設定
+setEndBtn.addEventListener('click', () => {
+  if (!videoPlayer.duration) return;
+  
+  const currentTime = videoPlayer.currentTime;
+  const percentage = (currentTime / videoPlayer.duration) * 100;
+  
+  // 開始位置より後であることを確認
+  if (percentage > parseFloat(startSlider.value)) {
+    endSlider.value = percentage;
+    updateTrimDisplay();
+  } else {
+    alert('終了位置は開始位置より後に設定してください');
+  }
+});
+
+// トリミング範囲を再生
+playTrimmedBtn.addEventListener('click', () => {
+  if (!videoPlayer.duration) return;
+  
+  videoPlayer.currentTime = trimState.startTime;
+  videoPlayer.play();
+  trimState.isLooping = true;
+});
+
+// トリミング設定をリセット
+resetTrimBtn.addEventListener('click', () => {
+  if (!videoPlayer.duration) return;
+  
+  startSlider.value = 0;
+  endSlider.value = 100;
+  trimState.isLooping = false;
+  updateTrimDisplay();
+});
+
+// 動画の再生位置を監視してトリミング範囲でループ
+videoPlayer.addEventListener('timeupdate', () => {
+  if (trimState.isLooping && videoPlayer.currentTime >= trimState.endTime) {
+    videoPlayer.currentTime = trimState.startTime;
+  }
+});
+
+// 動画が一時停止したらループを停止
+videoPlayer.addEventListener('pause', () => {
+  trimState.isLooping = false;
+});
+
+// 動画のメタデータが読み込まれたらトリミングスライダーを初期化
+videoPlayer.addEventListener('loadedmetadata', () => {
+  initTrimSliders();
 });

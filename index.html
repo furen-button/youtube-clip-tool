@@ -65,6 +65,62 @@
         <h2>動画プレビュー</h2>
         <video id="videoPlayer" controls class="video-player"></video>
         <div class="video-info" id="videoInfo"></div>
+        
+        <!-- トリミングコントロール -->
+        <div class="trimming-section" id="trimmingSection">
+          <h3>トリミング設定</h3>
+          
+          <div class="trimming-controls">
+            <div class="time-display">
+              <div class="time-item">
+                <label>開始位置</label>
+                <span id="startTimeDisplay" class="time-value">0:00.000</span>
+              </div>
+              <div class="time-item">
+                <label>終了位置</label>
+                <span id="endTimeDisplay" class="time-value">0:00.000</span>
+              </div>
+              <div class="time-item">
+                <label>トリミング時間</label>
+                <span id="durationDisplay" class="time-value">0:00.000</span>
+              </div>
+            </div>
+            
+            <div class="range-slider-container">
+              <label>トリミング範囲</label>
+              <div class="range-slider-wrapper">
+                <input 
+                  type="range" 
+                  id="startSlider" 
+                  class="range-slider range-slider-start" 
+                  min="0" 
+                  max="100" 
+                  value="0" 
+                  step="0.01"
+                >
+                <input 
+                  type="range" 
+                  id="endSlider" 
+                  class="range-slider range-slider-end" 
+                  min="0" 
+                  max="100" 
+                  value="100" 
+                  step="0.01"
+                >
+                <div class="range-slider-track">
+                  <div class="range-slider-highlight" id="rangeHighlight"></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="trimming-actions">
+              <button id="setStartBtn" class="btn btn-primary">現在位置を開始に</button>
+              <button id="setEndBtn" class="btn btn-primary">現在位置を終了に</button>
+              <button id="playTrimmedBtn" class="btn btn-success">トリミング範囲を再生</button>
+              <button id="resetTrimBtn" class="btn btn-secondary">リセット</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
