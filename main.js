@@ -132,3 +132,25 @@ ipcMain.handle('load-video-file', async (event, filePath) => {
     return { success: false, error: error.message };
   }
 });
+
+// メタデータをJSONファイルとして保存
+ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
+  try {
+    // output/json ディレクトリを作成
+    const outputDir = path.join(__dirname, 'output', 'json');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    // ファイル名を生成
+    const safeFileName = (fileName || 'metadata').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = path.join(outputDir, `${safeFileName}.json`);
+    
+    // JSONファイルを保存
+    fs.writeFileSync(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
+    
+    return { success: true, filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});

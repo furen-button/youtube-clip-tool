@@ -142,6 +142,70 @@
             </div>
           </div>
         </div>
+
+        <!-- メタデータ編集 -->
+        <div class="metadata-section" id="metadataSection">
+          <h3>メタデータ編集</h3>
+          
+          <div class="metadata-form">
+            <div class="form-group">
+              <label for="videoId">YouTube Video ID</label>
+              <div class="input-with-button">
+                <input type="text" id="videoId" class="form-input" placeholder="例: dQw4w9WgXcQ">
+                <button id="generateFileNameBtn" class="btn btn-info btn-sm" title="Video IDと時間からファイル名を生成">自動生成</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="fileName">ファイル名 (Title)</label>
+              <input type="text" id="fileName" class="form-input" placeholder="例: video_0-10">
+            </div>
+
+            <div class="form-group">
+              <label for="serif">セリフ (Serif)</label>
+              <div class="input-with-button">
+                <input type="text" id="serif" class="form-input" placeholder="セリフを入力">
+                <button id="generateRubyBtn" class="btn btn-info btn-sm" title="自動でひらがなに変換">ルビ生成</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="ruby">セリフルビ (Ruby)</label>
+              <input type="text" id="ruby" class="form-input" placeholder="ひらがなで入力">
+            </div>
+
+            <div class="form-group">
+              <label>カテゴリ（複数選択可）</label>
+              <div class="category-buttons" id="categoryButtons">
+                <button class="btn-category" data-category="面白い">面白い</button>
+                <button class="btn-category" data-category="感動">感動</button>
+                <button class="btn-category" data-category="驚き">驚き</button>
+                <button class="btn-category" data-category="癒し">癒し</button>
+                <button class="btn-category" data-category="学び">学び</button>
+                <button class="btn-category" data-category="その他">その他</button>
+              </div>
+              <div class="selected-categories" id="selectedCategories"></div>
+            </div>
+
+            <div class="form-group">
+              <label for="clipUrl">クリップURL</label>
+              <div class="input-with-button">
+                <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10">
+                <button id="generateClipUrlBtn" class="btn btn-info btn-sm" title="Video IDと開始時間からURL生成">URL生成</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="memo">メモ</label>
+              <textarea id="memo" class="form-textarea" rows="4" placeholder="メモを入力"></textarea>
+            </div>
+
+            <div class="metadata-actions">
+              <button id="saveMetadataBtn" class="btn btn-success">メタデータを保存 (JSON)</button>
+              <button id="clearMetadataBtn" class="btn btn-secondary">クリア</button>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>

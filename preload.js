@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadVideoFile: (filePath) =>
     ipcRenderer.invoke('load-video-file', filePath),
   
+  // メタデータを保存
+  saveMetadata: (metadata, fileName) =>
+    ipcRenderer.invoke('save-metadata', metadata, fileName),
+  
   // ダウンロード進捗の監視
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, progress) => callback(progress));

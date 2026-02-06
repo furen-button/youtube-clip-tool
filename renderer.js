@@ -40,6 +40,21 @@ const setEndBtn = document.getElementById('setEndBtn');
 const playTrimmedBtn = document.getElementById('playTrimmedBtn');
 const resetTrimBtn = document.getElementById('resetTrimBtn');
 
+// メタデータ関連の要素
+const videoIdInput = document.getElementById('videoId');
+const fileNameInput = document.getElementById('fileName');
+const serifInput = document.getElementById('serif');
+const rubyInput = document.getElementById('ruby');
+const clipUrlInput = document.getElementById('clipUrl');
+const memoInput = document.getElementById('memo');
+const categoryButtons = document.getElementById('categoryButtons');
+const selectedCategoriesDiv = document.getElementById('selectedCategories');
+const generateFileNameBtn = document.getElementById('generateFileNameBtn');
+const generateRubyBtn = document.getElementById('generateRubyBtn');
+const generateClipUrlBtn = document.getElementById('generateClipUrlBtn');
+const saveMetadataBtn = document.getElementById('saveMetadataBtn');
+const clearMetadataBtn = document.getElementById('clearMetadataBtn');
+
 // WaveSurferインスタンス
 let wavesurfer = null;
 let wavesurferRegions = null;
@@ -53,6 +68,20 @@ let trimState = {
   duration: 0,
   isLooping: false
 };
+
+// メタデータ状態
+let metadata = {
+  videoId: '',
+  fileName: '',
+  serif: '',
+  ruby: '',
+  categories: [],
+  clipUrl: '',
+  memo: ''
+};
+
+// 現在読み込まれている動画ファイル
+let currentVideoFile = null;
 
 /**
  * YouTube動画を検索
@@ -240,6 +269,20 @@ async function playVideo(fileIndex) {
   
   const file = window.downloadedFilesList[fileIndex];
   const filePath = file.path;
+  
+  // 現在の動画ファイル情報を保存
+  currentVideoFile = {
+    name: file.name,
+    path: filePath,
+    size: file.stats.size
+  };
+  
+  // Video IDを抽出（ファイル名から）
+  const videoIdMatch = file.name.match(/([a-zA-Z0-9_-]{11})/);
+  if (videoIdMatch) {
+    videoIdInput.value = videoIdMatch[1];
+    metadata.videoId = videoIdMatch[1];
+  }
   
   // デバッグ情報
   console.log('Loading video:', filePath);
@@ -761,3 +804,201 @@ resetZoomBtn.addEventListener('click', () => {
     console.error('ズームリセットエラー:', error);
   }
 });
+
+/**
+ * メタデータ編集機能
+ */
+
+// カテゴリボタンのクリックイベント
+categoryButtons.addEventListener('click', (e) => {
+  if (e.target.classList.contains('btn-category')) {
+    const category = e.target.dataset.category;
+    
+    // アクティブ状態をトグル
+    e.target.classList.toggle('active');
+    
+    // カテゴリ配列を更新
+    if (metadata.categories.includes(category)) {
+      metadata.categories = metadata.categories.filter(c => c !== category);
+    } else {
+      metadata.categories.push(category);
+    }
+    
+    // 選択済みカテゴリ表示を更新
+    updateSelectedCategories();
+  }
+});
+
+// 選択済みカテゴリの表示を更新
+function updateSelectedCategories() {
+  if (metadata.categories.length === 0) {
+    selectedCategoriesDiv.innerHTML = '<span style="color: #a0aec0; font-size: 0.9rem;">カテゴリが選択されていません</span>';
+    return;
+  }
+  
+  selectedCategoriesDiv.innerHTML = metadata.categories.map(category => `
+    <span class="category-tag">
+      ${escapeHtml(category)}
+      <span class="remove-btn" data-category="${escapeHtml(category)}">×</span>
+    </span>
+  `).join('');
+  
+  // 削除ボタンのイベント
+  selectedCategoriesDiv.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const category = btn.dataset.category;
+      metadata.categories = metadata.categories.filter(c => c !== category);
+      
+      // ボタンのアクティブ状態を解除
+      const categoryBtn = Array.from(categoryButtons.querySelectorAll('.btn-category'))
+        .find(b => b.dataset.category === category);
+      if (categoryBtn) {
+        categoryBtn.classList.remove('active');
+      }
+      
+      updateSelectedCategories();
+    });
+  });
+}
+
+// ファイル名の自動生成
+generateFileNameBtn.addEventListener('click', () => {
+  const videoId = videoIdInput.value.trim();
+  
+  if (!videoId) {
+    alert('Video IDを入力してください');
+    return;
+  }
+  
+  if (!videoPlayer.duration) {
+    alert('動画を読み込んでください');
+    return;
+  }
+  
+  // フォーマット: videoId_startTime-endTime
+  const startSec = Math.floor(trimState.startTime);
+  const endSec = Math.floor(trimState.endTime);
+  const fileName = `${videoId}_${startSec}-${endSec}`;
+  
+  fileNameInput.value = fileName;
+  metadata.fileName = fileName;
+});
+
+// ルビの自動生成（簡易版：ひらがな変換APIを使わず、そのまま表示）
+generateRubyBtn.addEventListener('click', () => {
+  const serif = serifInput.value.trim();
+  
+  if (!serif) {
+    alert('セリフを入力してください');
+    return;
+  }
+  
+  // 実際のアプリケーションでは、ひらがな変換APIを使用
+  // ここでは簡易的にアラートを表示
+  alert('ルビの自動生成機能は将来実装予定です。\n現在は手動でひらがなを入力してください。');
+});
+
+// クリップURLの自動生成
+generateClipUrlBtn.addEventListener('click', () => {
+  const videoId = videoIdInput.value.trim();
+  
+  if (!videoId) {
+    alert('Video IDを入力してください');
+    return;
+  }
+  
+  if (!videoPlayer.duration) {
+    alert('動画を読み込んでください');
+    return;
+  }
+  
+  // YouTube URL with timestamp
+  const startSec = Math.floor(trimState.startTime);
+  const clipUrl = `https://youtube.com/watch?v=${videoId}&t=${startSec}s`;
+  
+  clipUrlInput.value = clipUrl;
+  metadata.clipUrl = clipUrl;
+});
+
+// メタデータの保存（JSON）
+saveMetadataBtn.addEventListener('click', async () => {
+  // フォームデータを収集
+  metadata.videoId = videoIdInput.value.trim();
+  metadata.fileName = fileNameInput.value.trim();
+  metadata.serif = serifInput.value.trim();
+  metadata.ruby = rubyInput.value.trim();
+  metadata.clipUrl = clipUrlInput.value.trim();
+  metadata.memo = memoInput.value.trim();
+  
+  // トリミング情報も含める
+  const saveData = {
+    ...metadata,
+    trimming: {
+      startTime: trimState.startTime,
+      endTime: trimState.endTime,
+      duration: trimState.duration
+    },
+    videoFile: currentVideoFile,
+    createdAt: new Date().toISOString()
+  };
+  
+  try {
+    // IPCを使ってoutput/jsonディレクトリに保存
+    const result = await window.electronAPI.saveMetadata(saveData, metadata.fileName || 'metadata');
+    
+    if (result.success) {
+      alert(`メタデータを保存しました\n保存先: ${result.filePath}`);
+    } else {
+      alert(`保存に失敗しました: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('保存エラー:', error);
+    alert(`保存に失敗しました: ${error.message}`);
+  }
+});
+
+// メタデータのクリア
+clearMetadataBtn.addEventListener('click', () => {
+  if (!confirm('メタデータをクリアしますか？')) {
+    return;
+  }
+  
+  // フォームをクリア
+  videoIdInput.value = '';
+  fileNameInput.value = '';
+  serifInput.value = '';
+  rubyInput.value = '';
+  clipUrlInput.value = '';
+  memoInput.value = '';
+  
+  // カテゴリをクリア
+  metadata.categories = [];
+  categoryButtons.querySelectorAll('.btn-category').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  updateSelectedCategories();
+  
+  // メタデータオブジェクトをリセット
+  metadata = {
+    videoId: '',
+    fileName: '',
+    serif: '',
+    ruby: '',
+    categories: [],
+    clipUrl: '',
+    memo: ''
+  };
+  
+  alert('メタデータをクリアしました');
+});
+
+// 入力フィールドの変更を監視
+videoIdInput.addEventListener('input', (e) => metadata.videoId = e.target.value.trim());
+fileNameInput.addEventListener('input', (e) => metadata.fileName = e.target.value.trim());
+serifInput.addEventListener('input', (e) => metadata.serif = e.target.value.trim());
+rubyInput.addEventListener('input', (e) => metadata.ruby = e.target.value.trim());
+clipUrlInput.addEventListener('input', (e) => metadata.clipUrl = e.target.value.trim());
+memoInput.addEventListener('input', (e) => metadata.memo = e.target.value.trim());
+
+// 初期化
+updateSelectedCategories();
