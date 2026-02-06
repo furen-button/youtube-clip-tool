@@ -824,11 +824,12 @@ function toggleWaveform() {
 normalizeCheckbox.addEventListener('change', () => {
   if (wavesurfer && waveformVisible) {
     // 波形を再生成
-    toggleWaveform().then(() => {
-      if (waveformVisible) {
-        setTimeout(() => toggleWaveform(), 100);
+    toggleWaveform();
+    setTimeout(() => {
+      if (!waveformVisible) {
+        toggleWaveform();
       }
-    });
+    }, 100);
   }
 });
 
