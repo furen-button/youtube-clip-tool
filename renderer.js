@@ -321,25 +321,78 @@ function displayDownloadedVideos(files) {
     return;
   }
 
-  downloadedVideos.innerHTML = files.map((file, index) => `
-    <div class="video-item">
-      <div class="video-item-info">
-        <div class="video-item-name">${escapeHtml(file.name)}</div>
-        <div class="video-item-details">
-          サイズ: ${formatFileSize(file.stats.size)} | 
-          更新日時: ${new Date(file.stats.mtime).toLocaleString('ja-JP')}
+  // downloadedAt（メタデータ）またはファイル更新日時でソート（新しい順）
+  const sortedFiles = [...files].sort((a, b) => {
+    const dateA = a.metadata?.downloadedAt 
+      ? new Date(a.metadata.downloadedAt) 
+      : new Date(a.stats.mtime);
+    const dateB = b.metadata?.downloadedAt 
+      ? new Date(b.metadata.downloadedAt) 
+      : new Date(b.stats.mtime);
+    return dateB - dateA; // 降順（新しいものが上）
+  });
+
+  downloadedVideos.innerHTML = sortedFiles.map((file, index) => {
+    const metadata = file.metadata;
+    
+    if (metadata) {
+      // メタデータがある場合：サムネイル、タイトル、詳細情報を表示
+      return `
+        <div class="video-item-card">
+          <img src="${escapeHtml(metadata.thumbnail)}" alt="${escapeHtml(metadata.title)}" class="video-item-thumbnail" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22113%22%3E%3Crect fill=%22%23ddd%22 width=%22200%22 height=%22113%22/%3E%3C/svg%3E'">
+          <div class="video-item-content">
+            <div class="video-item-title">${escapeHtml(metadata.title)}</div>
+            <div class="video-item-metadata">
+              <div class="metadata-row">
+                <span class="metadata-label">チャンネル:</span>
+                <span>${escapeHtml(metadata.uploader)}</span>
+              </div>
+              <div class="metadata-row">
+                <span class="metadata-label">再生時間:</span>
+                <span>${formatDuration(metadata.duration)}</span>
+              </div>
+              <div class="metadata-row">
+                <span class="metadata-label">視聴回数:</span>
+                <span>${formatNumber(metadata.viewCount)}</span>
+              </div>
+              <div class="metadata-row">
+                <span class="metadata-label">ダウンロード日時:</span>
+                <span>${new Date(metadata.downloadedAt).toLocaleString('ja-JP')}</span>
+              </div>
+              <div class="metadata-row">
+                <span class="metadata-label">ファイルサイズ:</span>
+                <span>${formatFileSize(file.stats.size)}</span>
+              </div>
+            </div>
+            <button class="btn btn-primary video-item-play-btn" onclick="playVideo(${index})">
+              再生
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="video-item-actions">
-        <button class="btn btn-primary" onclick="playVideo(${index})">
-          再生
-        </button>
-      </div>
-    </div>
-  `).join('');
+      `;
+    } else {
+      // メタデータがない場合：従来の表示
+      return `
+        <div class="video-item">
+          <div class="video-item-info">
+            <div class="video-item-name">${escapeHtml(file.name)}</div>
+            <div class="video-item-details">
+              サイズ: ${formatFileSize(file.stats.size)} | 
+              更新日時: ${new Date(file.stats.mtime).toLocaleString('ja-JP')}
+            </div>
+          </div>
+          <div class="video-item-actions">
+            <button class="btn btn-primary" onclick="playVideo(${index})">
+              再生
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }).join('');
   
-  // ファイル情報を保存（再生時に使用）
-  window.downloadedFilesList = files;
+  // ファイル情報を保存（再生時に使用）- ソート済みのリストを保存
+  window.downloadedFilesList = sortedFiles;
 }
 
 /**

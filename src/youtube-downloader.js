@@ -195,7 +195,7 @@ class YouTubeDownloader {
       onProgress = null
     } = options;
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const outputPath = path.join(this.downloadDir, outputTemplate);
       const command = `yt-dlp -f "${format}" -o "${outputPath}" --no-playlist "${url}"`;
 
@@ -232,8 +232,34 @@ class YouTubeDownloader {
         console.error('stderr:', data.toString());
       });
 
-      child.on('close', (code) => {
+      child.on('close', async (code) => {
         if (code === 0) {
+          // ダウンロード成功後、動画情報を取得してメタデータとして保存
+          try {
+            const videoInfo = await this.getVideoInfo(url);
+            const videoFileName = path.basename(downloadedFile || outputPath);
+            const metadataFileName = videoFileName.replace(/\.[^.]+$/, '.json');
+            const metadataPath = path.join(this.downloadDir, metadataFileName);
+            
+            const metadata = {
+              videoId: videoInfo.id,
+              title: videoInfo.title,
+              duration: videoInfo.duration,
+              thumbnail: videoInfo.thumbnail,
+              uploader: videoInfo.uploader,
+              uploadDate: videoInfo.uploadDate,
+              viewCount: videoInfo.viewCount,
+              url: url,
+              downloadedAt: new Date().toISOString(),
+              filePath: downloadedFile || outputPath
+            };
+            
+            fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+            console.log('メタデータを保存しました:', metadataPath);
+          } catch (error) {
+            console.error('メタデータの保存に失敗しました:', error.message);
+          }
+          
           resolve({
             success: true,
             filePath: downloadedFile || outputPath,
@@ -267,11 +293,27 @@ class YouTubeDownloader {
           return ['.mp4', '.webm', '.mkv', '.avi', '.mov'].includes(ext);
         });
 
-        const fileInfos = videoFiles.map(file => ({
-          name: file,
-          path: path.join(this.downloadDir, file),
-          stats: fs.statSync(path.join(this.downloadDir, file))
-        }));
+        const fileInfos = videoFiles.map(file => {
+          const filePath = path.join(this.downloadDir, file);
+          const metadataPath = filePath.replace(/\.[^.]+$/, '.json');
+          
+          let metadata = null;
+          if (fs.existsSync(metadataPath)) {
+            try {
+              const metadataContent = fs.readFileSync(metadataPath, 'utf-8');
+              metadata = JSON.parse(metadataContent);
+            } catch (error) {
+              console.error(`メタデータの読み込みに失敗: ${metadataPath}`, error.message);
+            }
+          }
+          
+          return {
+            name: file,
+            path: filePath,
+            stats: fs.statSync(filePath),
+            metadata: metadata
+          };
+        });
 
         resolve(fileInfos);
       });
