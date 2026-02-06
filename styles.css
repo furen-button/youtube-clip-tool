@@ -99,6 +99,105 @@ header p {
   font-weight: 500;
 }
 
+/* 編集画面のレイアウト */
+.edit-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  min-height: calc(100vh - 300px);
+}
+
+.edit-left-panel {
+  position: sticky;
+  top: 20px;
+  height: fit-content;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.edit-right-panel {
+  overflow-y: auto;
+}
+
+/* 動画プレイヤーのサイズ調整 */
+.edit-left-panel .video-player {
+  width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  background-color: black;
+}
+
+.edit-left-panel .video-info {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f7fafc;
+  border-radius: 8px;
+}
+
+/* トリミング設定をコンパクトに */
+.edit-right-panel .trimming-section {
+  background: #f7fafc;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.edit-right-panel .trimming-section h3 {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.edit-right-panel .time-display {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.edit-right-panel .time-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.edit-right-panel .time-item label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.edit-right-panel .time-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.edit-right-panel .fine-tune-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.edit-right-panel .fine-tune-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+  display: block;
+}
+
+.edit-right-panel .fine-tune-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.edit-right-panel .trimming-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 15px;
+}
+
 main {
   display: flex;
   flex-direction: column;
@@ -954,6 +1053,17 @@ section h2 {
   /* ビデオリストをモバイルで1列表示 */
   .video-list {
     grid-template-columns: 1fr;
+  }
+  
+  /* 編集画面をモバイルで縦並び */
+  .edit-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .edit-left-panel {
+    position: relative;
+    top: 0;
+    max-height: none;
   }
 }
 
