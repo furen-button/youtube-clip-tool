@@ -3,17 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' blob:;">
   <title>YouTube Clip Tool</title>
   <link rel="stylesheet" href="styles.css">
   <!-- WaveSurfer.js CDN (Regions plugin included) -->
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+  <!-- simple-keyboard CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/css/index.css">
+  <script src="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/index.min.js"></script>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>YouTube Clip Tool</h1>
       <p>YouTube動画を検索・ダウンロードして編集できるツール</p>
+      <button id="shortcutSettingsBtn" class="btn-icon" title="キーボードショートカット設定 (K)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M6 16h12"/>
+        </svg>
+      </button>
     </header>
 
     <!-- タブナビゲーション -->
@@ -262,7 +272,33 @@
           </div><!-- edit-right-panel -->
         </div><!-- edit-layout -->
       </div><!-- editTab -->
-    </main>
+  <!-- キーボードショートカット設定モーダル -->
+  <div id="shortcutModal" class="modal">
+    <div class="modal-content shortcut-modal-content">
+      <div class="modal-header">
+        <h2>キーボードショートカット設定</h2>
+        <button class="modal-close" id="closeShortcutModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcut-info">
+          <p>各ショートカットを編集するには、設定したいアクションの「編集」ボタンをクリックしてキーを押してください。</p>
+        </div>
+        <div class="shortcut-list" id="shortcutList">
+          <!-- ショートカット一覧がここに表示される -->
+        </div>
+        <div class="shortcut-keyboard-container">
+          <h3 id="editingShortcutTitle" style="display: none;">キーを押してください</h3>
+          <div id="simpleKeyboard" class="simple-keyboard"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="resetShortcutsBtn" class="btn btn-secondary">デフォルトに戻す</button>
+          <button id="saveShortcutsBtn" class="btn btn-success">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  < </main>
   </div>
 
   <!-- トースト通知コンテナ -->

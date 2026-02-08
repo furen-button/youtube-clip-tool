@@ -1296,3 +1296,456 @@ memoInput.addEventListener('input', (e) => metadata.memo = e.target.value.trim()
 
 // 初期化
 updateSelectedCategories();
+
+/**
+ * ============================================
+ * キーボードショートカット機能
+ * ============================================
+ */
+
+// デフォルトのショートカット設定
+const defaultShortcuts = {
+  playPause: { key: 'Space', ctrl: false, shift: false, alt: false, action: '再生/一時停止', description: '動画の再生と一時停止を切り替え' },
+  frameBack1: { key: 'ArrowLeft', ctrl: false, shift: false, alt: false, action: '1フレーム戻る', description: '再生位置を1フレーム前に移動' },
+  frameForward1: { key: 'ArrowRight', ctrl: false, shift: false, alt: false, action: '1フレーム進む', description: '再生位置を1フレーム後に移動' },
+  frameBack15: { key: 'ArrowLeft', ctrl: false, shift: true, alt: false, action: '15フレーム戻る', description: '再生位置を15フレーム前に移動' },
+  frameForward15: { key: 'ArrowRight', ctrl: false, shift: true, alt: false, action: '15フレーム進む', description: '再生位置を15フレーム後に移動' },
+  setStart: { key: 'BracketLeft', ctrl: false, shift: false, alt: false, action: '開始位置を設定', description: '現在の再生位置をトリミング開始位置に設定' },
+  setEnd: { key: 'BracketRight', ctrl: false, shift: false, alt: false, action: '終了位置を設定', description: '現在の再生位置をトリミング終了位置に設定' },
+  toggleLoop: { key: 'KeyL', ctrl: false, shift: false, alt: false, action: 'ループ切り替え', description: 'トリミング範囲のループ再生を切り替え' },
+  toggleWaveform: { key: 'KeyW', ctrl: false, shift: false, alt: false, action: '波形表示切り替え', description: '音声波形の表示/非表示を切り替え' },
+  saveMetadata: { key: 'KeyS', ctrl: true, shift: false, alt: false, action: 'メタデータ保存', description: 'メタデータをJSON形式で保存' },
+  exportVideo: { key: 'KeyE', ctrl: true, shift: false, alt: false, action: '動画エクスポート', description: 'トリミング済み動画をMP4形式で書き出し' },
+  openSettings: { key: 'KeyK', ctrl: false, shift: false, alt: false, action: 'ショートカット設定', description: 'このショートカット設定画面を開く' },
+};
+
+// 現在のショートカット設定
+let shortcuts = { ...defaultShortcuts };
+
+// ショートカット編集中のアクションID
+let editingShortcutId = null;
+
+// simple-keyboardインスタンス
+let simpleKeyboard = null;
+
+// キーコードからキー名への変換マップ
+const keyCodeToKeyName = {
+  'Space': 'スペース',
+  'ArrowLeft': '←',
+  'ArrowRight': '→',
+  'ArrowUp': '↑',
+  'ArrowDown': '↓',
+  'BracketLeft': '[',
+  'BracketRight': ']',
+  'Enter': 'Enter',
+  'Escape': 'Esc',
+  'Backspace': 'Backspace',
+  'Tab': 'Tab',
+};
+
+// Keyプレフィックスを持つキーの変換
+function formatKeyName(key) {
+  if (keyCodeToKeyName[key]) {
+    return keyCodeToKeyName[key];
+  }
+  if (key.startsWith('Key')) {
+    return key.replace('Key', '');
+  }
+  if (key.startsWith('Digit')) {
+    return key.replace('Digit', '');
+  }
+  return key;
+}
+
+// ショートカット文字列の生成
+function getShortcutString(shortcut) {
+  const parts = [];
+  if (shortcut.ctrl) parts.push('Ctrl');
+  if (shortcut.shift) parts.push('Shift');
+  if (shortcut.alt) parts.push('Alt');
+  parts.push(formatKeyName(shortcut.key));
+  return parts.join(' + ');
+}
+
+// ショートカット設定の読み込み
+function loadShortcuts() {
+  try {
+    const saved = localStorage.getItem('keyboardShortcuts');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      shortcuts = { ...defaultShortcuts, ...parsed };
+    }
+  } catch (error) {
+    console.error('ショートカット設定の読み込みに失敗:', error);
+    shortcuts = { ...defaultShortcuts };
+  }
+}
+
+// ショートカット設定の保存
+function saveShortcutsToStorage() {
+  try {
+    localStorage.setItem('keyboardShortcuts', JSON.stringify(shortcuts));
+    showToast('ショートカット設定を保存しました', 'success');
+  } catch (error) {
+    console.error('ショートカット設定の保存に失敗:', error);
+    showToast('ショートカット設定の保存に失敗しました', 'error');
+  }
+}
+
+// ショートカットのリセット
+function resetShortcuts() {
+  if (!confirm('ショートカット設定をデフォルトに戻しますか？')) {
+    return;
+  }
+  shortcuts = { ...defaultShortcuts };
+  saveShortcutsToStorage();
+  renderShortcutList();
+  showToast('ショートカット設定をデフォルトに戻しました', 'success');
+}
+
+// ショートカット一覧の描画
+function renderShortcutList() {
+  const shortcutList = document.getElementById('shortcutList');
+  shortcutList.innerHTML = '';
+  
+  Object.entries(shortcuts).forEach(([id, shortcut]) => {
+    const item = document.createElement('div');
+    item.className = 'shortcut-item';
+    if (editingShortcutId === id) {
+      item.classList.add('editing');
+    }
+    
+    item.innerHTML = `
+      <div class="shortcut-item-left">
+        <div class="shortcut-action">${escapeHtml(shortcut.action)}</div>
+        <div class="shortcut-description">${escapeHtml(shortcut.description)}</div>
+      </div>
+      <div class="shortcut-item-right">
+        <div class="shortcut-key">${escapeHtml(getShortcutString(shortcut))}</div>
+        <button class="btn-edit-shortcut" data-id="${id}">編集</button>
+      </div>
+    `;
+    
+    shortcutList.appendChild(item);
+  });
+  
+  // 編集ボタンにイベントリスナーを追加
+  shortcutList.querySelectorAll('.btn-edit-shortcut').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.target.dataset.id;
+      editShortcut(id);
+    });
+  });
+}
+
+// ショートカット編集開始
+function editShortcut(id) {
+  editingShortcutId = id;
+  renderShortcutList();
+  
+  const editingTitle = document.getElementById('editingShortcutTitle');
+  editingTitle.style.display = 'block';
+  editingTitle.textContent = `「${shortcuts[id].action}」のキーを押してください`;
+  
+  showToast('新しいキーを押してください（Escでキャンセル）', 'info');
+}
+
+// ショートカット編集終了
+function finishEditingShortcut() {
+  editingShortcutId = null;
+  renderShortcutList();
+  
+  const editingTitle = document.getElementById('editingShortcutTitle');
+  editingTitle.style.display = 'none';
+}
+
+// モーダル内のキーボードイベント処理
+function handleModalKeyDown(e) {
+  if (!editingShortcutId) return;
+  
+  // Escapeで編集キャンセル
+  if (e.code === 'Escape') {
+    finishEditingShortcut();
+    showToast('編集をキャンセルしました', 'info');
+    return;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // 修飾キーのみの場合は無視
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+    return;
+  }
+  
+  // 現在編集中のショートカット情報を保存
+  const currentShortcut = shortcuts[editingShortcutId];
+  if (!currentShortcut) {
+    console.error('Invalid shortcut ID:', editingShortcutId);
+    finishEditingShortcut();
+    return;
+  }
+  
+  // 新しいショートカットを設定
+  const newShortcut = {
+    ...currentShortcut,
+    key: e.code,
+    ctrl: e.ctrlKey || e.metaKey,
+    shift: e.shiftKey,
+    alt: e.altKey,
+  };
+  
+  shortcuts[editingShortcutId] = newShortcut;
+  
+  // simple-keyboardのキーをハイライト
+  highlightKey(e.code);
+  
+  // 編集終了前にメッセージを作成
+  const message = `「${currentShortcut.action}」を ${getShortcutString(newShortcut)} に設定しました`;
+  
+  finishEditingShortcut();
+  showToast(message, 'success');
+}
+
+// simple-keyboardのキーをハイライト
+function highlightKey(code) {
+  if (!simpleKeyboard) return;
+  
+  // キーコードから表示名への変換
+  let buttonName = code;
+  if (code.startsWith('Key')) {
+    buttonName = code.replace('Key', '').toLowerCase();
+  } else if (code.startsWith('Digit')) {
+    buttonName = code.replace('Digit', '');
+  } else if (code === 'Space') {
+    buttonName = '{space}';
+  } else if (code === 'Enter') {
+    buttonName = '{enter}';
+  } else if (code === 'Backspace') {
+    buttonName = '{bksp}';
+  } else if (code === 'Tab') {
+    buttonName = '{tab}';
+  } else if (code === 'ArrowLeft') {
+    buttonName = '{arrowleft}';
+  } else if (code === 'ArrowRight') {
+    buttonName = '{arrowright}';
+  } else if (code === 'ArrowUp') {
+    buttonName = '{arrowup}';
+  } else if (code === 'ArrowDown') {
+    buttonName = '{arrowdown}';
+  } else if (code === 'BracketLeft') {
+    buttonName = '[';
+  } else if (code === 'BracketRight') {
+    buttonName = ']';
+  }
+  
+  // 一時的にキーをハイライト
+  const buttons = document.querySelectorAll('.hg-button');
+  buttons.forEach(btn => btn.classList.remove('hg-activeButton'));
+  
+  setTimeout(() => {
+    const targetButton = document.querySelector(`[data-skbtn="${buttonName}"]`);
+    if (targetButton) {
+      targetButton.classList.add('hg-activeButton');
+      setTimeout(() => {
+        targetButton.classList.remove('hg-activeButton');
+      }, 500);
+    }
+  }, 50);
+}
+
+// グローバルキーボードイベント処理
+function handleGlobalKeyDown(e) {
+  // 編集中の場合は処理しない（モーダル内のイベントハンドラーに任せる）
+  if (editingShortcutId) {
+    return;
+  }
+  
+  // モーダルが開いている場合は処理しない
+  const modal = document.getElementById('shortcutModal');
+  if (modal.classList.contains('active')) {
+    return;
+  }
+  
+  // 入力フィールドにフォーカスがある場合は処理しない
+  const activeElement = document.activeElement;
+  if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
+    return;
+  }
+  
+  // 動画が読み込まれていない場合は一部の機能のみ有効
+  const videoLoaded = currentVideoFile !== null;
+  
+  // ショートカット処理
+  Object.entries(shortcuts).forEach(([id, shortcut]) => {
+    if (
+      e.code === shortcut.key &&
+      (e.ctrlKey || e.metaKey) === shortcut.ctrl &&
+      e.shiftKey === shortcut.shift &&
+      e.altKey === shortcut.alt
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // アクションを実行
+      executeShortcutAction(id, videoLoaded);
+    }
+  });
+}
+
+// ショートカットアクション実行
+function executeShortcutAction(actionId, videoLoaded) {
+  switch (actionId) {
+    case 'playPause':
+      if (!videoLoaded) return;
+      if (videoPlayer.paused) {
+        videoPlayer.play();
+      } else {
+        videoPlayer.pause();
+      }
+      break;
+      
+    case 'frameBack1':
+      if (!videoLoaded) return;
+      adjustTime(-1);
+      break;
+      
+    case 'frameForward1':
+      if (!videoLoaded) return;
+      adjustTime(1);
+      break;
+      
+    case 'frameBack15':
+      if (!videoLoaded) return;
+      adjustTime(-15);
+      break;
+      
+    case 'frameForward15':
+      if (!videoLoaded) return;
+      adjustTime(15);
+      break;
+      
+    case 'setStart':
+      if (!videoLoaded) return;
+      setStartBtn.click();
+      break;
+      
+    case 'setEnd':
+      if (!videoLoaded) return;
+      setEndBtn.click();
+      break;
+      
+    case 'toggleLoop':
+      if (!videoLoaded) return;
+      loopCheckbox.checked = !loopCheckbox.checked;
+      trimState.isLooping = loopCheckbox.checked;
+      showToast(
+        `ループ再生を${trimState.isLooping ? 'オン' : 'オフ'}にしました`,
+        'info'
+      );
+      break;
+      
+    case 'toggleWaveform':
+      if (!videoLoaded) return;
+      toggleWaveformBtn.click();
+      break;
+      
+    case 'saveMetadata':
+      if (!videoLoaded) return;
+      saveMetadataBtn.click();
+      break;
+      
+    case 'exportVideo':
+      if (!videoLoaded) return;
+      exportVideoBtn.click();
+      break;
+      
+    case 'openSettings':
+      openShortcutModal();
+      break;
+  }
+}
+
+// フレーム単位の時間調整（ショートカット用）
+function adjustTime(frames) {
+  const frameTime = 1 / 30; // 30fps想定
+  const newTime = Math.max(0, Math.min(videoPlayer.duration, videoPlayer.currentTime + frames * frameTime));
+  videoPlayer.currentTime = newTime;
+  
+  // 波形の再生位置も更新
+  if (wavesurfer && waveformVisible) {
+    wavesurfer.setTime(newTime);
+  }
+}
+
+// ショートカット設定モーダルを開く
+function openShortcutModal() {
+  const modal = document.getElementById('shortcutModal');
+  modal.classList.add('active');
+  
+  // simple-keyboardを初期化（まだの場合）
+  if (!simpleKeyboard) {
+    const Keyboard = window.SimpleKeyboard.default;
+    simpleKeyboard = new Keyboard({
+      onChange: () => {},
+      onKeyPress: () => {},
+      layout: {
+        default: [
+          '` 1 2 3 4 5 6 7 8 9 0 - = {bksp}',
+          '{tab} q w e r t y u i o p [ ]',
+          'a s d f g h j k l',
+          '{shift} z x c v b n m {shift}',
+          '{space}'
+        ]
+      },
+      display: {
+        '{bksp}': 'Backspace',
+        '{tab}': 'Tab',
+        '{shift}': 'Shift',
+        '{space}': 'Space',
+      }
+    });
+  }
+  
+  renderShortcutList();
+  editingShortcutId = null;
+  document.getElementById('editingShortcutTitle').style.display = 'none';
+}
+
+// ショートカット設定モーダルを閉じる
+function closeShortcutModal() {
+  const modal = document.getElementById('shortcutModal');
+  modal.classList.remove('active');
+  editingShortcutId = null;
+}
+
+// イベントリスナー設定
+document.getElementById('shortcutSettingsBtn').addEventListener('click', openShortcutModal);
+document.getElementById('closeShortcutModal').addEventListener('click', closeShortcutModal);
+document.getElementById('resetShortcutsBtn').addEventListener('click', resetShortcuts);
+document.getElementById('saveShortcutsBtn').addEventListener('click', () => {
+  saveShortcutsToStorage();
+  closeShortcutModal();
+});
+
+// モーダル外クリックで閉じる
+document.getElementById('shortcutModal').addEventListener('click', (e) => {
+  if (e.target.id === 'shortcutModal') {
+    closeShortcutModal();
+  }
+});
+
+// モーダル内のキーボードイベント（キャプチャフェーズで先に処理）
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('shortcutModal');
+  if (modal.classList.contains('active') && editingShortcutId) {
+    handleModalKeyDown(e);
+  }
+}, true);
+
+// グローバルキーボードイベント
+document.addEventListener('keydown', handleGlobalKeyDown);
+
+// 初期化
+loadShortcuts();
+
