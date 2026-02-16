@@ -872,11 +872,11 @@ function adjustEndTime(frames) {
 }
 
 // 動画の再生位置を監視してトリミング範囲でループ
-videoPlayer.addEventListener('timeupdate', () => {
+setInterval(() => {
   if (trimState.isLooping && videoPlayer.currentTime >= trimState.endTime) {
     videoPlayer.currentTime = trimState.startTime;
   }
-});
+}, 1000 / 60); // 60fpsでチェック
 
 // 動画が一時停止したらループを停止
 videoPlayer.addEventListener('pause', () => {
