@@ -1246,7 +1246,7 @@ generateFileNameBtn.addEventListener('click', () => {
   autoGenerateFileName();
 });
 
-// ルビの自動生成（簡易版：ひらがな変換APIを使わず、そのまま表示）
+// ルビの自動生成（カタカナ→ひらがな変換）
 generateRubyBtn.addEventListener('click', () => {
   const serif = serifInput.value.trim();
   
@@ -1255,10 +1255,25 @@ generateRubyBtn.addEventListener('click', () => {
     return;
   }
   
-  // 実際のアプリケーションでは、ひらがな変換APIを使用
-  // ここでは簡易的にトーストを表示
-  showToast('ルビの自動生成機能は将来実装予定です。\n現在は手動でひらがなを入力してください。', 'info', 5000);
+  // カタカナをひらがなに変換
+  const ruby = katakanaToHiragana(serif);
+  rubyInput.value = ruby;
+  metadata.ruby = ruby;
+  
+  showToast('ルビを自動生成しました', 'success');
 });
+
+/**
+ * カタカナをひらがなに変換
+ * @param {string} str - 変換する文字列
+ * @returns {string} ひらがなに変換された文字列
+ */
+function katakanaToHiragana(str) {
+  return str.replace(/[\u30A1-\u30F6]/g, (match) => {
+    const charCode = match.charCodeAt(0) - 0x60;
+    return String.fromCharCode(charCode);
+  });
+}
 
 // クリップURLの自動生成ボタン（互換性のため残す）
 generateClipUrlBtn.addEventListener('click', () => {
