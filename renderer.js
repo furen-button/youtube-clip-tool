@@ -63,6 +63,11 @@ let wavesurferRegions = null;
 let trimRegion = null;
 let waveformVisible = false;
 
+// ズームパディング設定（秒）
+const zoomPaddingLevels = [5, 60, 300]; // 5秒、1分、5分
+let currentPaddingIndex = 0;
+let zoomPadding = zoomPaddingLevels[currentPaddingIndex];
+
 // トリミング状態
 let trimState = {
   startTime: 0,
@@ -642,10 +647,9 @@ function updateWaveformZoom() {
   const endTime = trimState.endTime;
   const width = waveformContainer.clientWidth;
   
-  // トリミング範囲の前後5秒を含めた表示範囲を計算
-  const padding = 5; // 前後の余白（秒）
-  const displayStartTime = Math.max(0, startTime - padding);
-  const displayEndTime = Math.min(duration, endTime + padding);
+  // トリミング範囲の前後に余白を含めた表示範囲を計算
+  const displayStartTime = Math.max(0, startTime - zoomPadding);
+  const displayEndTime = Math.min(duration, endTime + zoomPadding);
   const displayDuration = displayEndTime - displayStartTime;
   const zoomLevel = width / displayDuration;
   
@@ -655,6 +659,33 @@ function updateWaveformZoom() {
   } catch (error) {
     console.error('ズームエラー:', error);
   }
+}
+
+// ズームパディングを切り替える
+function cycleZoomPadding() {
+  if (!wavesurfer || !videoPlayer.duration) {
+    showToast('動画と波形を読み込んでください', 'warning');
+    return;
+  }
+  
+  // 次のパディングレベルに切り替え
+  currentPaddingIndex = (currentPaddingIndex + 1) % zoomPaddingLevels.length;
+  zoomPadding = zoomPaddingLevels[currentPaddingIndex];
+  
+  // パディング値を表示用にフォーマット
+  let paddingText;
+  if (zoomPadding < 60) {
+    paddingText = `${zoomPadding}秒`;
+  } else if (zoomPadding < 3600) {
+    paddingText = `${zoomPadding / 60}分`;
+  } else {
+    paddingText = `${zoomPadding / 3600}時間`;
+  }
+  
+  // ズームを更新
+  updateWaveformZoom();
+  
+  showToast(`ズームパディング: ${paddingText}`, 'info');
 }
 
 // トリミングスライダーの初期化
@@ -1392,6 +1423,7 @@ const defaultShortcuts = {
   setEnd: { key: 'BracketRight', ctrl: false, shift: false, alt: false, action: '終了位置を設定', description: '現在の再生位置をトリミング終了位置に設定' },
   toggleLoop: { key: 'KeyL', ctrl: false, shift: false, alt: false, action: 'ループ切り替え', description: 'トリミング範囲のループ再生を切り替え' },
   toggleWaveform: { key: 'KeyW', ctrl: false, shift: false, alt: false, action: '波形表示切り替え', description: '音声波形の表示/非表示を切り替え' },
+  zoomCycle: { key: 'KeyX', ctrl: false, shift: false, alt: false, action: 'ズーム倍率切り替え', description: 'トリミング範囲のパディング（5秒/1分/5分）を切り替え' },
   saveMetadata: { key: 'KeyS', ctrl: true, shift: false, alt: false, action: 'メタデータ保存', description: 'メタデータをJSON形式で保存' },
   exportVideo: { key: 'KeyE', ctrl: true, shift: false, alt: false, action: '動画エクスポート', description: 'トリミング済み動画をMP4形式で書き出し' },
   openSettings: { key: 'KeyK', ctrl: false, shift: false, alt: false, action: 'ショートカット設定', description: 'このショートカット設定画面を開く' },
@@ -1726,6 +1758,11 @@ function executeShortcutAction(actionId, videoLoaded) {
     case 'toggleWaveform':
       if (!videoLoaded) return;
       toggleWaveformBtn.click();
+      break;
+      
+    case 'zoomCycle':
+      if (!videoLoaded) return;
+      cycleZoomPadding();
       break;
       
     case 'saveMetadata':
