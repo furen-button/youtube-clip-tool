@@ -19,12 +19,19 @@
     <header>
       <h1>YouTube Clip Tool</h1>
       <p>YouTube動画を検索・ダウンロードして編集できるツール</p>
-      <button id="shortcutSettingsBtn" class="btn-icon" title="キーボードショートカット設定 (K)">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="4" width="20" height="16" rx="2"/>
-          <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M6 16h12"/>
-        </svg>
-      </button>
+      <div class="header-buttons">
+        <button id="categorySettingsBtn" class="btn-icon" title="カテゴリ設定">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <button id="shortcutSettingsBtn" class="btn-icon" title="キーボードショートカット設定 (K)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M6 16h12"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- タブナビゲーション -->
@@ -239,12 +246,7 @@
             <div class="form-group">
               <label>カテゴリ（複数選択可）</label>
               <div class="category-buttons" id="categoryButtons">
-                <button class="btn-category" data-category="面白い">面白い</button>
-                <button class="btn-category" data-category="感動">感動</button>
-                <button class="btn-category" data-category="驚き">驚き</button>
-                <button class="btn-category" data-category="癒し">癒し</button>
-                <button class="btn-category" data-category="学び">学び</button>
-                <button class="btn-category" data-category="その他">その他</button>
+                <!-- カテゴリボタンは動的に生成されます -->
               </div>
               <div class="selected-categories" id="selectedCategories"></div>
             </div>
@@ -274,6 +276,38 @@
         </div><!-- edit-layout -->
       </div><!-- editTab -->
   <!-- キーボードショートカット設定モーダル -->
+  <!-- カテゴリ設定モーダル -->
+  <div id="categoryModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>カテゴリ設定</h2>
+        <button class="modal-close" id="closeCategoryModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="category-manager">
+          <div class="category-form">
+            <h3>カテゴリを追加</h3>
+            <div class="input-group">
+              <input type="text" id="newCategoryInput" class="form-input" placeholder="新しいカテゴリ名">
+              <button id="addCategoryBtn" class="btn btn-primary">追加</button>
+            </div>
+          </div>
+          <div class="category-list-manager">
+            <h3>登録済みカテゴリ</h3>
+            <div id="categoryListManager" class="category-items">
+              <!-- カテゴリ一覧がここに表示される -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="resetCategoriesBtn" class="btn btn-secondary">デフォルトに戻す</button>
+          <button id="closeCategoryModalBtn" class="btn btn-success">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ショートカット設定モーダル -->
   <div id="shortcutModal" class="modal">
     <div class="modal-content shortcut-modal-content">
       <div class="modal-header">

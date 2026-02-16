@@ -90,6 +90,68 @@ let metadata = {
 // 現在読み込まれている動画ファイル
 let currentVideoFile = null;
 
+// カテゴリ設定
+const defaultCategories = ['面白い', '感動', '驚き', '癒し', '学び', 'その他'];
+let availableCategories = [...defaultCategories];
+
+/**
+ * 初期化処理
+ */
+function initialize() {
+  // カテゴリをlocalStorageから読み込み
+  loadCategories();
+  
+  // カテゴリボタンを生成
+  renderCategoryButtons();
+}
+
+/**
+ * カテゴリをlocalStorageから読み込み
+ */
+function loadCategories() {
+  try {
+    const saved = localStorage.getItem('availableCategories');
+    if (saved) {
+      availableCategories = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('カテゴリの読み込みエラー:', error);
+    availableCategories = [...defaultCategories];
+  }
+}
+
+/**
+ * カテゴリをlocalStorageに保存
+ */
+function saveCategories() {
+  try {
+    localStorage.setItem('availableCategories', JSON.stringify(availableCategories));
+  } catch (error) {
+    console.error('カテゴリの保存エラー:', error);
+  }
+}
+
+/**
+ * カテゴリボタンを動的生成
+ */
+function renderCategoryButtons() {
+  categoryButtons.innerHTML = '';
+  
+  availableCategories.forEach(category => {
+    const button = document.createElement('button');
+    button.className = 'btn-category';
+    button.dataset.category = category;
+    button.textContent = category;
+    
+    // 現在選択されているカテゴリならアクティブにする
+    if (metadata.categories.includes(category)) {
+      button.classList.add('active');
+    }
+    
+    categoryButtons.appendChild(button);
+  });
+}
+
 /**
  * タブ切り替え機能
  */
@@ -1849,7 +1911,166 @@ function closeShortcutModal() {
   editingShortcutId = null;
 }
 
+/**
+ * カテゴリ設定モーダル管理
+ */
+
+// カテゴリ設定モーダルを開く
+function openCategoryModal() {
+  const modal = document.getElementById('categoryModal');
+  modal.classList.add('active');
+  renderCategoryList();
+}
+
+// カテゴリ設定モーダルを閉じる
+function closeCategoryModal() {
+  const modal = document.getElementById('categoryModal');
+  modal.classList.remove('active');
+  document.getElementById('newCategoryInput').value = '';
+}
+
+// カテゴリリストを表示
+function renderCategoryList() {
+  const container = document.getElementById('categoryListManager');
+  
+  if (availableCategories.length === 0) {
+    container.innerHTML = '<p style="color: #a0aec0; text-align: center;">カテゴリがありません</p>';
+    return;
+  }
+  
+  container.innerHTML = availableCategories.map((category, index) => `
+    <div class="category-item">
+      <span class="category-item-name">${escapeHtml(category)}</span>
+      <div class="category-item-actions">
+        <button class="btn-edit-category" data-index="${index}" data-category="${escapeHtml(category)}">編集</button>
+        <button class="btn-delete-category" data-index="${index}">削除</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // 編集ボタンのイベント
+  container.querySelectorAll('.btn-edit-category').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = parseInt(btn.dataset.index);
+      const oldCategory = btn.dataset.category;
+      const newCategory = prompt('カテゴリ名を変更してください:', oldCategory);
+      
+      if (newCategory && newCategory.trim() !== '') {
+        const trimmedCategory = newCategory.trim();
+        
+        // 重複チェック
+        if (availableCategories.includes(trimmedCategory) && trimmedCategory !== oldCategory) {
+          showToast('そのカテゴリは既に存在します', 'warning');
+          return;
+        }
+        
+        // カテゴリ名を更新
+        availableCategories[index] = trimmedCategory;
+        
+        // メタデータ内のカテゴリも更新
+        if (metadata.categories.includes(oldCategory)) {
+          const categoryIndex = metadata.categories.indexOf(oldCategory);
+          metadata.categories[categoryIndex] = trimmedCategory;
+        }
+        
+        saveCategories();
+        renderCategoryList();
+        renderCategoryButtons();
+        updateSelectedCategories();
+        showToast('カテゴリを変更しました', 'success');
+      }
+    });
+  });
+  
+  // 削除ボタンのイベント
+  container.querySelectorAll('.btn-delete-category').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = parseInt(btn.dataset.index);
+      const category = availableCategories[index];
+      
+      if (confirm(`「${category}」を削除しますか？`)) {
+        // カテゴリを削除
+        availableCategories.splice(index, 1);
+        
+        // メタデータから削除
+        metadata.categories = metadata.categories.filter(c => c !== category);
+        
+        saveCategories();
+        renderCategoryList();
+        renderCategoryButtons();
+        updateSelectedCategories();
+        showToast('カテゴリを削除しました', 'success');
+      }
+    });
+  });
+}
+
+// カテゴリを追加
+function addCategory() {
+  const input = document.getElementById('newCategoryInput');
+  const category = input.value.trim();
+  
+  if (!category) {
+    showToast('カテゴリ名を入力してください', 'warning');
+    return;
+  }
+  
+  // 重複チェック
+  if (availableCategories.includes(category)) {
+    showToast('そのカテゴリは既に存在します', 'warning');
+    return;
+  }
+  
+  // カテゴリを追加
+  availableCategories.push(category);
+  saveCategories();
+  renderCategoryList();
+  renderCategoryButtons();
+  
+  input.value = '';
+  showToast('カテゴリを追加しました', 'success');
+}
+
+// カテゴリをデフォルトにリセット
+function resetCategories() {
+  if (confirm('カテゴリをデフォルトに戻しますか？\n現在のカテゴリ設定は失われます。')) {
+    availableCategories = [...defaultCategories];
+    
+    // 選択中のカテゴリから存在しないものを削除
+    metadata.categories = metadata.categories.filter(c => availableCategories.includes(c));
+    
+    saveCategories();
+    renderCategoryList();
+    renderCategoryButtons();
+    updateSelectedCategories();
+    showToast('カテゴリをデフォルトに戻しました', 'success');
+  }
+}
+
 // イベントリスナー設定
+
+// カテゴリ設定モーダル関連
+document.getElementById('categorySettingsBtn').addEventListener('click', openCategoryModal);
+document.getElementById('closeCategoryModal').addEventListener('click', closeCategoryModal);
+document.getElementById('closeCategoryModalBtn').addEventListener('click', closeCategoryModal);
+document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
+document.getElementById('resetCategoriesBtn').addEventListener('click', resetCategories);
+
+// Enterキーでカテゴリ追加
+document.getElementById('newCategoryInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    addCategory();
+  }
+});
+
+// モーダル外クリックで閉じる
+document.getElementById('categoryModal').addEventListener('click', (e) => {
+  if (e.target.id === 'categoryModal') {
+    closeCategoryModal();
+  }
+});
+
+// ショートカット設定モーダル関連
 document.getElementById('shortcutSettingsBtn').addEventListener('click', openShortcutModal);
 document.getElementById('closeShortcutModal').addEventListener('click', closeShortcutModal);
 document.getElementById('resetShortcutsBtn').addEventListener('click', resetShortcuts);
@@ -1877,5 +2098,6 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', handleGlobalKeyDown);
 
 // 初期化
+initialize();
 loadShortcuts();
 
