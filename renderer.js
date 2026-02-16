@@ -640,22 +640,18 @@ function updateWaveformZoom() {
   const duration = videoPlayer.duration;
   const startTime = trimState.startTime;
   const endTime = trimState.endTime;
-  const trimDuration = endTime - startTime;
+  const width = waveformContainer.clientWidth;
   
-  // ズーム倍率を計算（全体の長さ / トリミング範囲）
-  const zoomLevel = duration / trimDuration;
-  
-  // WaveSurferのズームを設定（倍率を適切な範囲に制限）
-  const clampedZoom = Math.max(1, Math.min(zoomLevel, 100));
+  // トリミング範囲の前後5秒を含めた表示範囲を計算
+  const padding = 5; // 前後の余白（秒）
+  const displayStartTime = Math.max(0, startTime - padding);
+  const displayEndTime = Math.min(duration, endTime + padding);
+  const displayDuration = displayEndTime - displayStartTime;
+  const zoomLevel = width / displayDuration;
   
   try {
-    wavesurfer.zoom(clampedZoom);
-    
-    // トリミング開始位置にスクロール
-    const scrollPercent = startTime / duration;
-    const container = waveformContainer;
-    const scrollLeft = scrollPercent * (container.scrollWidth - container.clientWidth);
-    container.scrollLeft = scrollLeft;
+    wavesurfer.zoom(zoomLevel);
+    wavesurfer.setScrollTime(displayStartTime);
   } catch (error) {
     console.error('ズームエラー:', error);
   }
@@ -680,6 +676,12 @@ startSlider.addEventListener('input', () => {
     startSlider.value = Math.max(0, parseFloat(endSlider.value) - 0.01);
   }
   updateTrimDisplay();
+  
+  // ループ再生をONにして範囲の頭から再生
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
+  videoPlayer.currentTime = trimState.startTime;
+  videoPlayer.play().catch(e => console.error('再生エラー:', e));
 });
 
 // 終了位置スライダーの変更
@@ -689,6 +691,13 @@ endSlider.addEventListener('input', () => {
     endSlider.value = Math.min(100, parseFloat(startSlider.value) + 0.01);
   }
   updateTrimDisplay();
+  
+  // ループ再生をONにして範囲の最後の2秒前から再生
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
+  const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
+  videoPlayer.currentTime = playbackTime;
+  videoPlayer.play().catch(e => console.error('再生エラー:', e));
 });
 
 // 現在位置を開始位置に設定
@@ -702,6 +711,12 @@ setStartBtn.addEventListener('click', () => {
   if (percentage < parseFloat(endSlider.value)) {
     startSlider.value = percentage;
     updateTrimDisplay();
+    
+    // ループ再生をONにして範囲の頭から再生
+    trimState.isLooping = true;
+    loopCheckbox.checked = true;
+    videoPlayer.currentTime = trimState.startTime;
+    videoPlayer.play().catch(e => console.error('再生エラー:', e));
   } else {
     showToast('開始位置は終了位置より前に設定してください', 'warning');
   }
@@ -718,6 +733,13 @@ setEndBtn.addEventListener('click', () => {
   if (percentage > parseFloat(startSlider.value)) {
     endSlider.value = percentage;
     updateTrimDisplay();
+    
+    // ループ再生をONにして範囲の最後の2秒前から再生
+    trimState.isLooping = true;
+    loopCheckbox.checked = true;
+    const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
+    videoPlayer.currentTime = playbackTime;
+    videoPlayer.play().catch(e => console.error('再生エラー:', e));
   } else {
     showToast('終了位置は開始位置より後に設定してください', 'warning');
   }
@@ -788,7 +810,9 @@ function adjustStartTime(frames) {
   startSlider.value = percentage;
   updateTrimDisplay();
   
-  // 開始位置から再生
+  // ループ再生をONにして開始位置から再生
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
   videoPlayer.currentTime = trimState.startTime;
   videoPlayer.play().catch(e => console.error('再生エラー:', e));
 }
@@ -808,7 +832,9 @@ function adjustEndTime(frames) {
   endSlider.value = percentage;
   updateTrimDisplay();
   
-  // 終了位置の2秒前から再生
+  // ループ再生をONにして終了位置の2秒前から再生
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
   const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
   videoPlayer.currentTime = playbackTime;
   videoPlayer.play().catch(e => console.error('再生エラー:', e));
@@ -857,6 +883,7 @@ function initWaveSurfer() {
     backend: 'MediaElement',
     media: videoPlayer,
     autoplay: false,
+    autoScroll: false,
     interact: true
   });
 
@@ -868,13 +895,27 @@ function initWaveSurfer() {
     updateWaveformRegion();
   }
 
+  // Region更新タイマー
+  let regionUpdateTimer = null;
+  let regionUpdateType = null; // 'start' or 'end' - どちらのハンドルが動いたか
+
   // Region更新イベント - ドラッグでトリミング範囲を変更
   wavesurferRegions.on('region-updated', (region) => {
     if (region.id === 'trim-region') {
       const duration = videoPlayer.duration;
+      const oldStartTime = trimState.startTime;
+      const oldEndTime = trimState.endTime;
+      
       trimState.startTime = region.start;
       trimState.endTime = region.end;
       trimState.duration = region.end - region.start;
+
+      // どちらのハンドルが動いたかを判定
+      if (Math.abs(region.start - oldStartTime) > 0.01) {
+        regionUpdateType = 'start';
+      } else if (Math.abs(region.end - oldEndTime) > 0.01) {
+        regionUpdateType = 'end';
+      }
 
       // スライダーを更新
       startSlider.value = (region.start / duration) * 100;
@@ -885,6 +926,30 @@ function initWaveSurfer() {
       endTimeDisplay.textContent = formatTimeWithMillis(region.end);
       durationDisplay.textContent = formatTimeWithMillis(region.end - region.start);
       updateRangeHighlight();
+      
+      // 既存のタイマーをクリア
+      if (regionUpdateTimer) {
+        clearTimeout(regionUpdateTimer);
+      }
+      
+      // ドラッグ終了後に再生（300ms後）
+      regionUpdateTimer = setTimeout(() => {
+        // ループONにして再生
+        trimState.isLooping = true;
+        loopCheckbox.checked = true;
+        
+        if (regionUpdateType === 'start') {
+          // 開始位置を動かした場合：頭から再生
+          videoPlayer.currentTime = trimState.startTime;
+        } else if (regionUpdateType === 'end') {
+          // 終了位置を動かした場合：2秒前から再生
+          const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
+          videoPlayer.currentTime = playbackTime;
+        }
+        
+        videoPlayer.play().catch(e => console.error('再生エラー:', e));
+        regionUpdateType = null;
+      }, 300);
     }
   });
 
@@ -1021,9 +1086,12 @@ resetZoomBtn.addEventListener('click', () => {
   }
   
   try {
-    // ズームをリセット（倍率1）
-    wavesurfer.zoom(1);
-    waveformContainer.scrollLeft = 0;
+    // ズームをリセット
+    const duration = videoPlayer.duration;
+    const width = waveformContainer.clientWidth;
+    const zoomLevel = width / duration;
+    wavesurfer.zoom(zoomLevel);
+    wavesurfer.setScrollTime(0);
   } catch (error) {
     console.error('ズームリセットエラー:', error);
   }
