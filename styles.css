@@ -117,6 +117,7 @@ header p {
 
 .edit-right-panel {
   overflow-y: auto;
+  max-height: calc(100vh - 200px);
 }
 
 /* 動画プレイヤーのサイズ調整 */
@@ -139,7 +140,7 @@ header p {
   background: #f7fafc;
   padding: 15px;
   border-radius: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .edit-right-panel .trimming-section h3 {
@@ -601,8 +602,8 @@ section h2 {
 .waveform-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .checkbox-label {
@@ -624,11 +625,12 @@ section h2 {
 .waveform-container {
   width: 100%;
   min-height: 128px;
-  background-color: #f7fafc;
+  background-color: #ffffff;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
   position: relative;
+  margin-bottom: 10px;
 }
 
 .waveform-loading {
@@ -651,25 +653,122 @@ section h2 {
   cursor: pointer !important;
 }
 
-/* トリミング機能 */
+/* 微調整フレーム設定 */
+.fine-tune-settings {
+  background-color: #f8fafc;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.setting-item label {
+  font-size: 0.85rem;
+  color: #4a5568;
+  min-width: 20px;
+}
+
+.setting-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #667eea;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* 微調整ボタン（コンパクト版） */
+.fine-tune-controls-compact {
+  background-color: #ffffff;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.fine-tune-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fine-tune-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+  min-width: 40px;
+}
+
+.fine-tune-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+  margin: 0 5px;
+}
+
+.btn-xs {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border: 1px solid #cbd5e0;
+  background-color: #ffffff;
+  color: #4a5568;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.btn-xs:hover {
+  background-color: #667eea;
+  color: white;
+  border-color: #667eea;
+  transform: none;
+}
+
+/* トリミング機能（波形統合版） */
 .trimming-section {
-  margin-top: 30px;
-  padding: 20px;
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding: 15px;
   background-color: #f7fafc;
   border-radius: 8px;
-  border: 2px solid #e2e8f0;
+  border: 1px solid #e2e8f0;
+}
+
+.trimming-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .trimming-section h3 {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   color: #667eea;
-  margin-bottom: 20px;
+  margin: 0;
 }
 
 .trimming-controls {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
 }
 
 .time-display {
@@ -706,7 +805,7 @@ section h2 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 20px 15px;
+  padding: 15px;
   background-color: white;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
@@ -716,6 +815,7 @@ section h2 {
   font-size: 0.9rem;
   font-weight: 600;
   color: #4a5568;
+  display: none;
 }
 
 .range-slider-wrapper {
@@ -853,19 +953,148 @@ section h2 {
   min-width: 150px;
 }
 
+/* 時間表示（コンパクト版） */
+.time-display-compact {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.time-row {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.time-item-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.time-item-compact label {
+  font-size: 0.75rem;
+  color: #718096;
+  font-weight: 600;
+}
+
+.time-item-compact .time-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+  font-family: 'Courier New', monospace;
+}
+
+/* トリミングアクション（コンパクト版） */
+.trimming-actions-compact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.trimming-actions-compact .btn:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.trimming-actions-compact .btn {
+  padding: 10px 16px;
+  font-size: 0.9rem;
+}
+
+/* 微調整ボタン（コンパクト版） */
+.fine-tune-controls-compact {
+  background-color: #ffffff;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.fine-tune-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fine-tune-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+  min-width: 40px;
+}
+
+.fine-tune-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #e2e8f0;
+  margin: 0 5px;
+}
+
+.btn-xs {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border: 1px solid #cbd5e0;
+  background-color: #ffffff;
+  color: #4a5568;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-xs kbd {
+  background-color: #edf2f7;
+  color: #667eea;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #cbd5e0;
+  font-family: 'Courier New', monospace;
+}
+
+.btn-xs:hover {
+  background-color: #667eea;
+  color: white;
+  border-color: #667eea;
+  transform: none;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.btn-xs:hover kbd {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-xs:active {
+  transform: scale(0.98);
+}
+
 /* メタデータセクション */
 .metadata-section {
   background: white;
-  padding: 20px;
+  padding: 15px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
+  margin-top: 15px;
+}
+
+.metadata-section h3 {
+  font-size: 1.1rem;
+  color: #667eea;
+  margin-bottom: 15px;
 }
 
 .metadata-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
 }
 
 .form-group {
@@ -1217,6 +1446,16 @@ header {
 .btn-icon:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: scale(1.1);
+}
+
+.btn-icon-danger {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.btn-icon-danger:hover {
+  background: rgba(239, 68, 68, 0.4);
+  border-color: rgba(239, 68, 68, 0.6);
 }
 
 .btn-icon svg {

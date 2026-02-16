@@ -23,7 +23,6 @@ const videoInfo = document.getElementById('videoInfo');
 // 波形表示関連の要素
 const waveformContainer = document.getElementById('waveform');
 const waveformLoading = document.getElementById('waveformLoading');
-const toggleWaveformBtn = document.getElementById('toggleWaveformBtn');
 const normalizeCheckbox = document.getElementById('normalizeCheckbox');
 const zoomToTrimBtn = document.getElementById('zoomToTrimBtn');
 const resetZoomBtn = document.getElementById('resetZoomBtn');
@@ -38,7 +37,6 @@ const rangeHighlight = document.getElementById('rangeHighlight');
 const setStartBtn = document.getElementById('setStartBtn');
 const setEndBtn = document.getElementById('setEndBtn');
 const playTrimmedBtn = document.getElementById('playTrimmedBtn');
-const resetTrimBtn = document.getElementById('resetTrimBtn');
 const loopCheckbox = document.getElementById('loopCheckbox');
 
 // メタデータ関連の要素
@@ -67,6 +65,12 @@ let waveformVisible = false;
 const zoomPaddingLevels = [5, 60, 300]; // 5秒、1分、5分
 let currentPaddingIndex = 0;
 let zoomPadding = zoomPaddingLevels[currentPaddingIndex];
+
+// 微調整フレーム設定
+let fineTuneSettings = {
+  smallFrames: 1,
+  largeFrames: 15
+};
 
 // トリミング状態
 let trimState = {
@@ -103,6 +107,12 @@ function initialize() {
   
   // カテゴリボタンを生成
   renderCategoryButtons();
+  
+  // 微調整フレーム設定を読み込み
+  loadFineTuneSettings();
+  
+  // 微調整ボタンのラベルを更新
+  updateFineTuneButtonLabels();
 }
 
 /**
@@ -129,6 +139,99 @@ function saveCategories() {
   } catch (error) {
     console.error('カテゴリの保存エラー:', error);
   }
+}
+
+/**
+ * 微調整フレーム設定をlocalStorageから読み込み
+ */
+function loadFineTuneSettings() {
+  try {
+    const saved = localStorage.getItem('fineTuneSettings');
+    if (saved) {
+      fineTuneSettings = JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('微調整設定の読み込みエラー:', error);
+    fineTuneSettings = { smallFrames: 1, largeFrames: 15 };
+  }
+}
+
+/**
+ * 微調整フレーム設定をlocalStorageに保存
+ */
+function saveFineTuneSettings() {
+  try {
+    localStorage.setItem('fineTuneSettings', JSON.stringify(fineTuneSettings));
+  } catch (error) {
+    console.error('微調整設定の保存エラー:', error);
+  }
+}
+
+/**
+ * 微調整ボタンのラベルを更新
+ */
+function updateFineTuneButtonLabels() {
+  const small = fineTuneSettings.smallFrames;
+  const large = fineTuneSettings.largeFrames;
+  
+  // 設定値の表示を更新
+  document.getElementById('smallFramesValue').textContent = small;
+  document.getElementById('largeFramesValue').textContent = large;
+  
+  // ショートカットキーの表示名を取得
+  const getKeyDisplay = (shortcutId, defaultKey) => {
+    const shortcut = shortcuts[shortcutId];
+    if (shortcut && shortcut.key) {
+      return formatKeyName(shortcut.key);
+    }
+    return defaultKey;
+  };
+  
+  // 開始位置ボタンのラベルとタイトルを更新
+  const startMinusLargeBtn = document.getElementById('startMinusLargeFrameBtn');
+  const startMinusSmallBtn = document.getElementById('startMinusSmallFrameBtn');
+  const startPlusSmallBtn = document.getElementById('startPlusSmallFrameBtn');
+  const startPlusLargeBtn = document.getElementById('startPlusLargeFrameBtn');
+  
+  const keyStartMinusLarge = getKeyDisplay('startMinusLarge', 'Q');
+  const keyStartMinusSmall = getKeyDisplay('startMinusSmall', 'W');
+  const keyStartPlusSmall = getKeyDisplay('startPlusSmall', 'E');
+  const keyStartPlusLarge = getKeyDisplay('startPlusLarge', 'R');
+  
+  startMinusLargeBtn.innerHTML = `<kbd>${keyStartMinusLarge}</kbd> -${large}F`;
+  startMinusLargeBtn.title = `-${large}フレーム (${keyStartMinusLarge})`;
+  
+  startMinusSmallBtn.innerHTML = `<kbd>${keyStartMinusSmall}</kbd> -${small}F`;
+  startMinusSmallBtn.title = `-${small}フレーム (${keyStartMinusSmall})`;
+  
+  startPlusSmallBtn.innerHTML = `<kbd>${keyStartPlusSmall}</kbd> +${small}F`;
+  startPlusSmallBtn.title = `+${small}フレーム (${keyStartPlusSmall})`;
+  
+  startPlusLargeBtn.innerHTML = `<kbd>${keyStartPlusLarge}</kbd> +${large}F`;
+  startPlusLargeBtn.title = `+${large}フレーム (${keyStartPlusLarge})`;
+  
+  // 終了位置ボタンのラベルとタイトルを更新
+  const endMinusLargeBtn = document.getElementById('endMinusLargeFrameBtn');
+  const endMinusSmallBtn = document.getElementById('endMinusSmallFrameBtn');
+  const endPlusSmallBtn = document.getElementById('endPlusSmallFrameBtn');
+  const endPlusLargeBtn = document.getElementById('endPlusLargeFrameBtn');
+  
+  const keyEndMinusLarge = getKeyDisplay('endMinusLarge', 'A');
+  const keyEndMinusSmall = getKeyDisplay('endMinusSmall', 'S');
+  const keyEndPlusSmall = getKeyDisplay('endPlusSmall', 'D');
+  const keyEndPlusLarge = getKeyDisplay('endPlusLarge', 'F');
+  
+  endMinusLargeBtn.innerHTML = `<kbd>${keyEndMinusLarge}</kbd> -${large}F`;
+  endMinusLargeBtn.title = `-${large}フレーム (${keyEndMinusLarge})`;
+  
+  endMinusSmallBtn.innerHTML = `<kbd>${keyEndMinusSmall}</kbd> -${small}F`;
+  endMinusSmallBtn.title = `-${small}フレーム (${keyEndMinusSmall})`;
+  
+  endPlusSmallBtn.innerHTML = `<kbd>${keyEndPlusSmall}</kbd> +${small}F`;
+  endPlusSmallBtn.title = `+${small}フレーム (${keyEndPlusSmall})`;
+  
+  endPlusLargeBtn.innerHTML = `<kbd>${keyEndPlusLarge}</kbd> +${large}F`;
+  endPlusLargeBtn.title = `+${large}フレーム (${keyEndPlusLarge})`;
 }
 
 /**
@@ -542,6 +645,9 @@ async function playVideo(fileIndex) {
       // Video IDから自動生成
       autoGenerateFileName();
       autoGenerateClipUrl();
+      
+      // 波形を自動表示
+      showWaveform();
     };
   } catch (error) {
     console.error('動画の読み込みエラー:', error);
@@ -853,17 +959,6 @@ loopCheckbox.addEventListener('change', () => {
   trimState.isLooping = loopCheckbox.checked;
 });
 
-// トリミング設定をリセット
-resetTrimBtn.addEventListener('click', () => {
-  if (!videoPlayer.duration) return;
-  
-  startSlider.value = 0;
-  endSlider.value = 100;
-  trimState.isLooping = true;
-  loopCheckbox.checked = true;
-  updateTrimDisplay();
-});
-
 /**
  * トリミング範囲の微調整機能
  */
@@ -877,16 +972,16 @@ function framesToSeconds(frames, frameRate = DEFAULT_FRAME_RATE) {
 }
 
 // 開始位置の微調整
-document.getElementById('startMinus15FrameBtn').addEventListener('click', () => adjustStartTime(-15));
-document.getElementById('startMinus1FrameBtn').addEventListener('click', () => adjustStartTime(-1));
-document.getElementById('startPlus1FrameBtn').addEventListener('click', () => adjustStartTime(1));
-document.getElementById('startPlus15FrameBtn').addEventListener('click', () => adjustStartTime(15));
+document.getElementById('startMinusLargeFrameBtn').addEventListener('click', () => adjustStartTime(-fineTuneSettings.largeFrames));
+document.getElementById('startMinusSmallFrameBtn').addEventListener('click', () => adjustStartTime(-fineTuneSettings.smallFrames));
+document.getElementById('startPlusSmallFrameBtn').addEventListener('click', () => adjustStartTime(fineTuneSettings.smallFrames));
+document.getElementById('startPlusLargeFrameBtn').addEventListener('click', () => adjustStartTime(fineTuneSettings.largeFrames));
 
 // 終了位置の微調整
-document.getElementById('endMinus15FrameBtn').addEventListener('click', () => adjustEndTime(-15));
-document.getElementById('endMinus1FrameBtn').addEventListener('click', () => adjustEndTime(-1));
-document.getElementById('endPlus1FrameBtn').addEventListener('click', () => adjustEndTime(1));
-document.getElementById('endPlus15FrameBtn').addEventListener('click', () => adjustEndTime(15));
+document.getElementById('endMinusLargeFrameBtn').addEventListener('click', () => adjustEndTime(-fineTuneSettings.largeFrames));
+document.getElementById('endMinusSmallFrameBtn').addEventListener('click', () => adjustEndTime(-fineTuneSettings.smallFrames));
+document.getElementById('endPlusSmallFrameBtn').addEventListener('click', () => adjustEndTime(fineTuneSettings.smallFrames));
+document.getElementById('endPlusLargeFrameBtn').addEventListener('click', () => adjustEndTime(fineTuneSettings.largeFrames));
 
 // 開始位置を調整
 function adjustStartTime(frames) {
@@ -899,14 +994,14 @@ function adjustStartTime(frames) {
   newStartTime = Math.max(0, Math.min(newStartTime, trimState.endTime - 0.1));
   
   // スライダーを更新
-  const percentage = (newStartTime / videoPlayer.duration) * 100;
-  startSlider.value = percentage;
+  const newPercentage = (newStartTime / videoPlayer.duration) * 100;
+  startSlider.value = newPercentage;
   updateTrimDisplay();
   
   // ループ再生をONにして開始位置から再生
   trimState.isLooping = true;
   loopCheckbox.checked = true;
-  videoPlayer.currentTime = trimState.startTime;
+  videoPlayer.currentTime = newStartTime;
   videoPlayer.play().catch(e => console.error('再生エラー:', e));
 }
 
@@ -921,8 +1016,8 @@ function adjustEndTime(frames) {
   newEndTime = Math.max(trimState.startTime + 0.1, Math.min(newEndTime, videoPlayer.duration));
   
   // スライダーを更新
-  const percentage = (newEndTime / videoPlayer.duration) * 100;
-  endSlider.value = percentage;
+  const newPercentage = (newEndTime / videoPlayer.duration) * 100;
+  endSlider.value = newPercentage;
   updateTrimDisplay();
   
   // ループ再生をONにして終了位置の2秒前から再生
@@ -1114,45 +1209,25 @@ function updateWaveformRegion() {
   }
 }
 
-// 波形表示を切り替え
-function toggleWaveform() {
+// 波形表示を自動的に表示
+function showWaveform() {
   if (!videoPlayer.src) {
-    showToast('動画を選択してください', 'warning');
     return;
   }
 
-  waveformVisible = !waveformVisible;
+  waveformVisible = true;
+  waveformContainer.style.display = 'block';
+  waveformLoading.style.display = 'block';
+  waveformLoading.textContent = '波形を生成中...';
+  zoomToTrimBtn.style.display = 'inline-block';
+  resetZoomBtn.style.display = 'inline-block';
 
-  if (waveformVisible) {
-    // 波形を表示
-    waveformContainer.style.display = 'block';
-    waveformLoading.style.display = 'block';
-    waveformLoading.textContent = '波形を生成中...';
-    toggleWaveformBtn.textContent = '波形を非表示';
-    zoomToTrimBtn.style.display = 'inline-block';
-    resetZoomBtn.style.display = 'inline-block';
-
-    try {
-      // video要素を使用してWaveSurferを初期化
-      // media: videoPlayerを設定しているので、loadは不要
-      initWaveSurfer();
-    } catch (error) {
-      console.error('波形の読み込みエラー:', error);
-      waveformLoading.textContent = '波形の生成に失敗しました';
-    }
-  } else {
-    // 波形を非表示
-    waveformContainer.style.display = 'none';
-    waveformLoading.style.display = 'none';
-    toggleWaveformBtn.textContent = '波形を表示';
-    zoomToTrimBtn.style.display = 'none';
-    resetZoomBtn.style.display = 'none';
-    if (wavesurfer) {
-      wavesurfer.destroy();
-      wavesurfer = null;
-      wavesurferRegions = null;
-      trimRegion = null;
-    }
+  try {
+    // video要素を使用してWaveSurferを初期化
+    initWaveSurfer();
+  } catch (error) {
+    console.error('波形の読み込みエラー:', error);
+    waveformLoading.textContent = '波形の生成に失敗しました';
   }
 }
 
@@ -1160,17 +1235,15 @@ function toggleWaveform() {
 normalizeCheckbox.addEventListener('change', () => {
   if (wavesurfer && waveformVisible) {
     // 波形を再生成
-    toggleWaveform();
-    setTimeout(() => {
-      if (!waveformVisible) {
-        toggleWaveform();
-      }
-    }, 100);
+    if (wavesurfer) {
+      wavesurfer.destroy();
+      wavesurfer = null;
+      wavesurferRegions = null;
+      trimRegion = null;
+    }
+    showWaveform();
   }
 });
-
-// 波形表示ボタンのクリック
-toggleWaveformBtn.addEventListener('click', toggleWaveform);
 
 // トリミング範囲にズーム
 zoomToTrimBtn.addEventListener('click', () => {
@@ -1499,7 +1572,14 @@ const defaultShortcuts = {
   setStart: { key: 'BracketLeft', ctrl: false, shift: false, alt: false, action: '開始位置を設定', description: '現在の再生位置をトリミング開始位置に設定' },
   setEnd: { key: 'BracketRight', ctrl: false, shift: false, alt: false, action: '終了位置を設定', description: '現在の再生位置をトリミング終了位置に設定' },
   toggleLoop: { key: 'KeyL', ctrl: false, shift: false, alt: false, action: 'ループ切り替え', description: 'トリミング範囲のループ再生を切り替え' },
-  toggleWaveform: { key: 'KeyW', ctrl: false, shift: false, alt: false, action: '波形表示切り替え', description: '音声波形の表示/非表示を切り替え' },
+  startMinusLarge: { key: 'KeyQ', ctrl: false, shift: false, alt: false, action: '開始-大フレーム', description: 'トリミング開始位置を大フレーム数前に移動' },
+  startMinusSmall: { key: 'KeyW', ctrl: false, shift: false, alt: false, action: '開始-小フレーム', description: 'トリミング開始位置を小フレーム数前に移動' },
+  startPlusSmall: { key: 'KeyE', ctrl: false, shift: false, alt: false, action: '開始+小フレーム', description: 'トリミング開始位置を小フレーム数後に移動' },
+  startPlusLarge: { key: 'KeyR', ctrl: false, shift: false, alt: false, action: '開始+大フレーム', description: 'トリミング開始位置を大フレーム数後に移動' },
+  endMinusLarge: { key: 'KeyA', ctrl: false, shift: false, alt: false, action: '終了-大フレーム', description: 'トリミング終了位置を大フレーム数前に移動' },
+  endMinusSmall: { key: 'KeyS', ctrl: false, shift: false, alt: false, action: '終了-小フレーム', description: 'トリミング終了位置を小フレーム数前に移動' },
+  endPlusSmall: { key: 'KeyD', ctrl: false, shift: false, alt: false, action: '終了+小フレーム', description: 'トリミング終了位置を小フレーム数後に移動' },
+  endPlusLarge: { key: 'KeyF', ctrl: false, shift: false, alt: false, action: '終了+大フレーム', description: 'トリミング終了位置を大フレーム数後に移動' },
   zoomCycle: { key: 'KeyX', ctrl: false, shift: false, alt: false, action: 'ズーム倍率切り替え', description: 'トリミング範囲のパディング（5秒/1分/5分）を切り替え' },
   saveMetadata: { key: 'KeyS', ctrl: true, shift: false, alt: false, action: 'メタデータ保存', description: 'メタデータをJSON形式で保存' },
   exportVideo: { key: 'KeyE', ctrl: true, shift: false, alt: false, action: '動画エクスポート', description: 'トリミング済み動画をMP4形式で書き出し' },
@@ -1572,6 +1652,7 @@ function loadShortcuts() {
 function saveShortcutsToStorage() {
   try {
     localStorage.setItem('keyboardShortcuts', JSON.stringify(shortcuts));
+    updateFineTuneButtonLabels(); // 微調整ボタンのラベルを更新
     showToast('ショートカット設定を保存しました', 'success');
   } catch (error) {
     console.error('ショートカット設定の保存に失敗:', error);
@@ -1587,6 +1668,7 @@ function resetShortcuts() {
   shortcuts = { ...defaultShortcuts };
   saveShortcutsToStorage();
   renderShortcutList();
+  updateFineTuneButtonLabels(); // 微調整ボタンのラベルを更新
   showToast('ショートカット設定をデフォルトに戻しました', 'success');
 }
 
@@ -1832,14 +1914,49 @@ function executeShortcutAction(actionId, videoLoaded) {
       );
       break;
       
-    case 'toggleWaveform':
-      if (!videoLoaded) return;
-      toggleWaveformBtn.click();
-      break;
-      
     case 'zoomCycle':
       if (!videoLoaded) return;
       cycleZoomPadding();
+      break;
+      
+    case 'startMinusLarge':
+      if (!videoLoaded) return;
+      adjustStartTime(-fineTuneSettings.largeFrames);
+      break;
+      
+    case 'startMinusSmall':
+      if (!videoLoaded) return;
+      adjustStartTime(-fineTuneSettings.smallFrames);
+      break;
+      
+    case 'startPlusSmall':
+      if (!videoLoaded) return;
+      adjustStartTime(fineTuneSettings.smallFrames);
+      break;
+      
+    case 'startPlusLarge':
+      if (!videoLoaded) return;
+      adjustStartTime(fineTuneSettings.largeFrames);
+      break;
+      
+    case 'endMinusLarge':
+      if (!videoLoaded) return;
+      adjustEndTime(-fineTuneSettings.largeFrames);
+      break;
+      
+    case 'endMinusSmall':
+      if (!videoLoaded) return;
+      adjustEndTime(-fineTuneSettings.smallFrames);
+      break;
+      
+    case 'endPlusSmall':
+      if (!videoLoaded) return;
+      adjustEndTime(fineTuneSettings.smallFrames);
+      break;
+      
+    case 'endPlusLarge':
+      if (!videoLoaded) return;
+      adjustEndTime(fineTuneSettings.largeFrames);
       break;
       
     case 'saveMetadata':
@@ -2047,7 +2164,81 @@ function resetCategories() {
   }
 }
 
+// 全設定をリセット
+function resetAllSettings() {
+  if (!confirm('全ての設定をデフォルトに戻しますか？\n\n以下の設定がリセットされます：\n・カテゴリ設定\n・キーボードショートカット\n・微調整フレーム設定\n\nこの操作は取り消せません。')) {
+    return;
+  }
+  
+  try {
+    // localStorageから全設定を削除
+    localStorage.removeItem('availableCategories');
+    localStorage.removeItem('keyboardShortcuts');
+    localStorage.removeItem('fineTuneSettings');
+    
+    // カテゴリをデフォルトに戻す
+    availableCategories = [...defaultCategories];
+    metadata.categories = metadata.categories.filter(c => availableCategories.includes(c));
+    renderCategoryList();
+    renderCategoryButtons();
+    updateSelectedCategories();
+    
+    // ショートカットをデフォルトに戻す
+    shortcuts = { ...defaultShortcuts };
+    renderShortcutList();
+    
+    // 微調整フレーム設定をデフォルトに戻す
+    fineTuneSettings = { smallFrames: 1, largeFrames: 15 };
+    updateFineTuneButtonLabels();
+    
+    showToast('全ての設定をデフォルトに戻しました', 'success');
+  } catch (error) {
+    console.error('設定のリセットに失敗:', error);
+    showToast('設定のリセットに失敗しました', 'error');
+  }
+}
+
 // イベントリスナー設定
+
+// 微調整フレーム設定の+-ボタン
+document.getElementById('smallFramesMinus').addEventListener('click', () => {
+  if (fineTuneSettings.smallFrames > 1) {
+    fineTuneSettings.smallFrames--;
+    saveFineTuneSettings();
+    updateFineTuneButtonLabels();
+    showToast(`小フレーム数: ${fineTuneSettings.smallFrames}`, 'info');
+  }
+});
+
+document.getElementById('smallFramesPlus').addEventListener('click', () => {
+  if (fineTuneSettings.smallFrames < 30) {
+    fineTuneSettings.smallFrames++;
+    saveFineTuneSettings();
+    updateFineTuneButtonLabels();
+    showToast(`小フレーム数: ${fineTuneSettings.smallFrames}`, 'info');
+  }
+});
+
+document.getElementById('largeFramesMinus').addEventListener('click', () => {
+  if (fineTuneSettings.largeFrames > 1) {
+    fineTuneSettings.largeFrames--;
+    saveFineTuneSettings();
+    updateFineTuneButtonLabels();
+    showToast(`大フレーム数: ${fineTuneSettings.largeFrames}`, 'info');
+  }
+});
+
+document.getElementById('largeFramesPlus').addEventListener('click', () => {
+  if (fineTuneSettings.largeFrames < 60) {
+    fineTuneSettings.largeFrames++;
+    saveFineTuneSettings();
+    updateFineTuneButtonLabels();
+    showToast(`大フレーム数: ${fineTuneSettings.largeFrames}`, 'info');
+  }
+});
+
+// 全設定リセットボタン
+document.getElementById('resetAllSettingsBtn').addEventListener('click', resetAllSettings);
 
 // カテゴリ設定モーダル関連
 document.getElementById('categorySettingsBtn').addEventListener('click', openCategoryModal);
