@@ -22,38 +22,13 @@ YouTubeから動画を検索・ダウンロードし、編集できるElectron�
 
 ## 必要な環境
 
-- Node.js (v16以上推奨)
+- Node.js (v22以上推奨)
 - yt-dlp (YouTubeダウンロード用)
-- YouTube Data API v3のAPIキー (検索機能用、推奨)
+- YouTube Data API v3のAPIキー (検索機能用)
 
-## yt-dlpのインストール
+## YouTube Data API v3の設定
 
-### macOS
-```bash
-brew install yt-dlp
-```
-
-### Windows
-```bash
-# pipを使用
-pip install yt-dlp
-
-# またはchocolateyを使用
-choco install yt-dlp
-```
-
-### Linux
-```bash
-# pipを使用
-pip install yt-dlp
-
-# またはsnapを使用
-sudo snap install yt-dlp
-```
-
-## YouTube Data API v3の設定（推奨）
-
-YouTube APIを使用すると、より高速で安定した検索が可能になります。
+YouTube APIを使用して検索します。
 
 ### 1. Google Cloud Consoleでプロジェクトを作成
 
@@ -76,9 +51,7 @@ YOUTUBE_API_KEY=YOUR_ACTUAL_API_KEY_HERE
 
 ### 注意事項
 
-- APIキーが設定されていない場合、自動的にyt-dlpでの検索にフォールバックします
-- YouTube Data API v3には無料枠があり、1日あたり10,000ユニットまで利用可能です
-- 検索1回につき約100ユニット消費されます
+- YouTube Data API v3には1日あたりのクォータが制限されています。
 
 ## インストール方法
 
@@ -141,34 +114,6 @@ youtube-clip-tool/
 - **HTML/CSS/JavaScript**: フロントエンド
 
 ## トラブルシューティング
-
-### YouTube APIキーが設定されていない
-
-APIキーが設定されていない場合、自動的にyt-dlpでの検索にフォールバックしますが、検索が遅くなる可能性があります。
-上記の「YouTube Data API v3の設定」を参照してAPIキーを設定してください。
-
-### yt-dlpが見つからない
-
-```bash
-# yt-dlpがインストールされているか確認
-which yt-dlp
-
-# パスが表示されない場合は再インストール
-```
-
-### ダウンロードに失敗する
-
-- インターネット接続を確認
-- yt-dlpを最新バージョンに更新: `pip install -U yt-dlp`
-- YouTubeのURLが正しいか確認
-
-### 検索に失敗する、または「stdout maxBuffer length exceeded」エラー
-
-このエラーはyt-dlpの検索結果が大きすぎる場合に発生します。以下の対処法があります：
-
-1. **推奨**: YouTube Data API v3のAPIキーを設定（上記の設定手順を参照）
-2. 検索キーワードをより具体的にする
-3. APIキーを設定すれば、高速で安定した検索が可能になります
 
 ### 動画が再生できない
 
