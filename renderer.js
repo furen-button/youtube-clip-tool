@@ -890,6 +890,16 @@ function initWaveSurfer() {
   // Regionsプラグインを初期化
   wavesurferRegions = wavesurfer.registerPlugin(WaveSurfer.Regions.create());
 
+  // Minimapプラグインを初期化
+  wavesurfer.registerPlugin(WaveSurfer.Minimap.create({
+    height: 30,
+    waveColor: '#999',
+    progressColor: '#667eea',
+    cursorColor: '#e53e3e',
+    barWidth: 1,
+    barGap: 1
+  }));
+
   // 既存のトリミング範囲でregionを作成
   if (videoPlayer.duration) {
     updateWaveformRegion();
