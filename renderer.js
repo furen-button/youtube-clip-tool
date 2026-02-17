@@ -94,6 +94,14 @@ let metadata = {
 // 現在読み込まれている動画ファイル
 let currentVideoFile = null;
 
+// コメント密度関連
+const commentDensityContainer = document.getElementById('commentDensityContainer');
+const commentDensityCanvas = document.getElementById('commentDensityCanvas');
+const loadCommentsBtn = document.getElementById('loadCommentsBtn');
+const downloadCommentsBtn = document.getElementById('downloadCommentsBtn');
+let commentDensityData = null; // 密度データキャッシュ
+let commentDensityVisible = false;
+
 // カテゴリ設定
 const defaultCategories = ['面白い', '感動', '驚き', '癒し', '学び', 'その他'];
 let availableCategories = [...defaultCategories];
@@ -533,6 +541,10 @@ function displayDownloadedVideos(files) {
                 <span class="metadata-label">ファイルサイズ:</span>
                 <span>${formatFileSize(file.stats.size)}</span>
               </div>
+              <div class="metadata-row">
+                <span class="metadata-label">コメント:</span>
+                <span class="badge ${file.hasLiveChat ? 'badge-success' : 'badge-muted'}">${file.hasLiveChat ? 'DL済み' : '未取得'}</span>
+              </div>
             </div>
             <button class="btn btn-primary video-item-play-btn" onclick="playVideo(${index})">
               再生
@@ -581,7 +593,8 @@ async function playVideo(fileIndex) {
   currentVideoFile = {
     name: file.name,
     path: filePath,
-    size: file.stats.size
+    size: file.stats.size,
+    hasLiveChat: file.hasLiveChat || false
   };
   
   // Video IDを抽出（ファイル名から）
@@ -646,8 +659,17 @@ async function playVideo(fileIndex) {
       autoGenerateFileName();
       autoGenerateClipUrl();
       
+      // コメントボタンの見た目を更新
+      updateCommentButtons();
+      
       // 波形を自動表示
       showWaveform();
+      
+      // コメントDL済みなら密度を自動表示
+      if (currentVideoFile && currentVideoFile.hasLiveChat) {
+        // 波形ready後にコメント密度を表示（少し待つ）
+        setTimeout(() => loadAndShowCommentDensity(true), 500);
+      }
     };
   } catch (error) {
     console.error('動画の読み込みエラー:', error);
@@ -2287,6 +2309,234 @@ document.addEventListener('keydown', (e) => {
 
 // グローバルキーボードイベント
 document.addEventListener('keydown', handleGlobalKeyDown);
+
+/**
+ * ライブチャット コメント密度表示機能
+ */
+
+/**
+ * コメント関連ボタンの見た目を更新
+ */
+function updateCommentButtons() {
+  const hasChat = currentVideoFile && currentVideoFile.hasLiveChat;
+  if (hasChat) {
+    // DL済み: コメント密度ボタンを目立たせる
+    loadCommentsBtn.classList.remove('btn-warning');
+    loadCommentsBtn.classList.add('btn-success');
+    loadCommentsBtn.textContent = 'コメント密度';
+    // DLボタンは目立たなく
+    downloadCommentsBtn.classList.remove('btn-secondary');
+    downloadCommentsBtn.classList.add('btn-outline');
+    downloadCommentsBtn.textContent = 'コメントDL済';
+  } else {
+    // 未DL: DLボタンを目立たせる
+    loadCommentsBtn.classList.remove('btn-success');
+    loadCommentsBtn.classList.add('btn-warning');
+    loadCommentsBtn.textContent = 'コメント密度';
+    downloadCommentsBtn.classList.remove('btn-outline');
+    downloadCommentsBtn.classList.add('btn-secondary');
+    downloadCommentsBtn.textContent = 'コメントDL';
+  }
+}
+
+/**
+ * コメント密度データを読み込み、キャンバスに描画
+ * @param {boolean} autoMode - trueの場合は自動表示（トグルしない）
+ */
+async function loadAndShowCommentDensity(autoMode = false) {
+  const videoId = metadata.videoId || videoIdInput.value.trim();
+  if (!videoId) {
+    showToast('Video IDが設定されていません', 'warning');
+    return;
+  }
+
+  if (!videoPlayer.duration) {
+    showToast('動画を読み込んでください', 'warning');
+    return;
+  }
+
+  try {
+    // 密度すでに表示中ならトグルで非表示（自動モードではトグルしない）
+    if (!autoMode && commentDensityVisible && commentDensityData) {
+      commentDensityContainer.style.display = 'none';
+      commentDensityVisible = false;
+      loadCommentsBtn.textContent = 'コメント密度';
+      showToast('コメント密度表示をOFFにしました', 'info');
+      return;
+    }
+    
+    // 自動モードで既に表示済みなら何もしない
+    if (autoMode && commentDensityVisible && commentDensityData) {
+      return;
+    }
+
+    loadCommentsBtn.textContent = '読込中...';
+    loadCommentsBtn.disabled = true;
+
+    // 動画の長さに応じて集計間隔を自動調整
+    const duration = videoPlayer.duration;
+    let intervalSec = 5;
+    if (duration > 7200) intervalSec = 30;      // 2時間以上: 30秒間隔
+    else if (duration > 3600) intervalSec = 15;  // 1時間以上: 15秒間隔
+    else if (duration > 1800) intervalSec = 10;  // 30分以上: 10秒間隔
+
+    const result = await window.electronAPI.getCommentDensity(videoId, intervalSec);
+
+    if (!result.success || !result.data.exists) {
+      showToast('コメントデータが見つかりません。「コメントDL」で先にダウンロードしてください。', 'warning');
+      loadCommentsBtn.textContent = 'コメント密度';
+      loadCommentsBtn.disabled = false;
+      return;
+    }
+
+    commentDensityData = result.data;
+    commentDensityVisible = true;
+    commentDensityContainer.style.display = 'block';
+
+    drawCommentDensity();
+
+    loadCommentsBtn.textContent = 'コメント密度 ON';
+    loadCommentsBtn.disabled = false;
+    showToast(`コメント密度を表示（${result.data.totalComments}件, ${intervalSec}秒間隔）`, 'success');
+  } catch (error) {
+    console.error('コメント密度の読み込みエラー:', error);
+    showToast(`コメント密度の読み込みに失敗: ${error.message}`, 'error');
+    loadCommentsBtn.textContent = 'コメント密度';
+    loadCommentsBtn.disabled = false;
+  }
+}
+
+/**
+ * コメント密度をCanvasに描画
+ */
+function drawCommentDensity() {
+  if (!commentDensityData || !commentDensityData.density) return;
+
+  const canvas = commentDensityCanvas;
+  const container = commentDensityContainer;
+  const ctx = canvas.getContext('2d');
+
+  // Canvas解像度をコンテナサイズに合わせる
+  const rect = container.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const width = rect.width;
+  const height = rect.height;
+  const { density, maxCount } = commentDensityData;
+  const videoDuration = videoPlayer.duration || 1;
+
+  // 背景クリア
+  ctx.clearRect(0, 0, width, height);
+
+  if (density.length === 0 || maxCount === 0) return;
+
+  // 各バケットの棒グラフを描画
+  const barCount = density.length;
+
+  for (let i = 0; i < barCount; i++) {
+    const bucket = density[i];
+    // 動画全体に対するこのバケットの位置（0-1）
+    const xStart = (bucket.startTime / videoDuration) * width;
+    const xEnd = (bucket.endTime / videoDuration) * width;
+    const barWidth = Math.max(xEnd - xStart, 1);
+
+    // 高さ（密度に比例）
+    const ratio = bucket.count / maxCount;
+    const barHeight = ratio * (height - 4); // 上下2pxマージン
+
+    // 色: 青(少) → 黄(中) → 赤(多) のグラデーション
+    const color = getDensityColor(ratio);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(xStart, height - barHeight - 2, barWidth, barHeight);
+  }
+
+  // 平均ラインを描画
+  const avgRatio = commentDensityData.avgCount / maxCount;
+  const avgY = height - (avgRatio * (height - 4)) - 2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, avgY);
+  ctx.lineTo(width, avgY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/**
+ * 密度比率から色を生成（青→黄→赤のグラデーション）
+ * @param {number} ratio - 0〜1の比率
+ * @returns {string} CSS色文字列
+ */
+function getDensityColor(ratio) {
+  // 0: 青 → 0.5: 黄 → 1.0: 赤
+  let r, g, b;
+  if (ratio < 0.5) {
+    const t = ratio * 2; // 0-1
+    r = Math.round(50 + t * 205);   // 50 → 255
+    g = Math.round(100 + t * 155);  // 100 → 255
+    b = Math.round(200 - t * 200);  // 200 → 0
+  } else {
+    const t = (ratio - 0.5) * 2; // 0-1
+    r = 255;
+    g = Math.round(255 - t * 200);  // 255 → 55
+    b = Math.round(t * 30);         // 0 → 30
+  }
+  return `rgba(${r}, ${g}, ${b}, 0.85)`;
+}
+
+/**
+ * ライブチャットデータをダウンロード
+ */
+async function downloadLiveChatData() {
+  const videoId = metadata.videoId || videoIdInput.value.trim();
+  if (!videoId) {
+    showToast('Video IDが設定されていません', 'warning');
+    return;
+  }
+
+  try {
+    downloadCommentsBtn.textContent = 'DL中...';
+    downloadCommentsBtn.disabled = true;
+    showToast('ライブチャットデータをダウンロード中...', 'info', 5000);
+
+    const result = await window.electronAPI.downloadLiveChat(videoId);
+
+    if (result.success) {
+      showToast(`ライブチャットをダウンロードしました（${result.data.commentCount}件）`, 'success');
+      // DL済み状態を更新
+      if (currentVideoFile) {
+        currentVideoFile.hasLiveChat = true;
+      }
+      updateCommentButtons();
+      // ダウンロード後、密度表示を自動的にON
+      commentDensityData = null; // キャッシュクリア
+      await loadAndShowCommentDensity(true);
+    } else {
+      showToast(`ダウンロードに失敗: ${result.error}`, 'error');
+    }
+  } catch (error) {
+    showToast(`ダウンロードエラー: ${error.message}`, 'error');
+  } finally {
+    downloadCommentsBtn.textContent = 'コメントDL';
+    downloadCommentsBtn.disabled = false;
+  }
+}
+
+// コメント密度ボタンのイベントリスナー
+loadCommentsBtn.addEventListener('click', () => loadAndShowCommentDensity(false));
+downloadCommentsBtn.addEventListener('click', downloadLiveChatData);
+
+// ウィンドウリサイズ時にCanvas再描画
+window.addEventListener('resize', () => {
+  if (commentDensityVisible && commentDensityData) {
+    drawCommentDensity();
+  }
+});
 
 // 初期化
 initialize();

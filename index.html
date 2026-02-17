@@ -126,6 +126,9 @@
                     <input type="checkbox" id="normalizeCheckbox">
                     <span>正規化</span>
                   </label>
+                  <span class="controls-divider">|</span>
+                  <button id="loadCommentsBtn" class="btn btn-warning btn-sm" title="ライブチャットのコメント密度を表示">コメント密度</button>
+                  <button id="downloadCommentsBtn" class="btn btn-secondary btn-sm" title="yt-dlpでライブチャットをダウンロード">コメントDL</button>
                 </div>
               </div>
               
@@ -155,6 +158,10 @@
               
               <!-- 音声波形 -->
               <div id="waveform" class="waveform-container"></div>
+              <!-- コメント密度オーバーレイ -->
+              <div id="commentDensityContainer" class="comment-density-container" style="display: none;">
+                <canvas id="commentDensityCanvas" class="comment-density-canvas"></canvas>
+              </div>
               <div id="waveformLoading" class="waveform-loading" style="display: none;">
                 波形を生成中...
               </div>

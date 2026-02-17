@@ -91,6 +91,38 @@ ipcMain.handle('download-video', async (event, url, options) => {
   }
 });
 
+// ライブチャットデータをダウンロード
+ipcMain.handle('download-live-chat', async (event, videoId) => {
+  try {
+    const result = await downloader.downloadLiveChat(videoId, (progress) => {
+      mainWindow.webContents.send('live-chat-progress', progress);
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ライブチャットデータを取得（パース済み）
+ipcMain.handle('get-live-chat-data', async (event, videoId) => {
+  try {
+    const result = downloader.getLiveChatData(videoId);
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// コメント密度データを取得
+ipcMain.handle('get-comment-density', async (event, videoId, intervalSec) => {
+  try {
+    const result = downloader.getCommentDensity(videoId, intervalSec);
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // ダウンロード済み動画一覧を取得
 ipcMain.handle('list-downloaded-videos', async () => {
   try {

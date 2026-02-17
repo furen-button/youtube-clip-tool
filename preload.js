@@ -36,6 +36,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportVideo: (inputPath, outputFileName, startTime, endTime) =>
     ipcRenderer.invoke('export-video', inputPath, outputFileName, startTime, endTime),
   
+  // ライブチャットデータをダウンロード
+  downloadLiveChat: (videoId) =>
+    ipcRenderer.invoke('download-live-chat', videoId),
+  
+  // ライブチャットデータを取得（パース済み）
+  getLiveChatData: (videoId) =>
+    ipcRenderer.invoke('get-live-chat-data', videoId),
+  
+  // コメント密度データを取得
+  getCommentDensity: (videoId, intervalSec = 5) =>
+    ipcRenderer.invoke('get-comment-density', videoId, intervalSec),
+  
   // ダウンロード進捗の監視
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (event, progress) => callback(progress));
@@ -44,6 +56,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // エクスポート進捗の監視
   onExportProgress: (callback) => {
     ipcRenderer.on('export-progress', (event, progress) => callback(progress));
+  },
+  
+  // ライブチャットダウンロード進捗の監視
+  onLiveChatProgress: (callback) => {
+    ipcRenderer.on('live-chat-progress', (event, progress) => callback(progress));
   },
   
   // ダウンロード進捗リスナーの削除

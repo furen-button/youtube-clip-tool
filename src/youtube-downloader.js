@@ -277,6 +277,259 @@ class YouTubeDownloader {
   }
 
   /**
+   * ライブ配信のチャット（コメント）データをダウンロード
+   * yt-dlpの--write-subsオプションを使用してライブチャットをJSON形式で取得
+   * @param {string} videoId - YouTube動画のID
+   * @param {Function} onProgress - 進捗コールバック
+   * @returns {Promise<Object>} ダウンロード結果（ファイルパスとコメント数）
+   */
+  async downloadLiveChat(videoId, onProgress = null) {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const outputTemplate = path.join(this.downloadDir, `${videoId}.%(ext)s`);
+
+    return new Promise((resolve, reject) => {
+      // ライブチャットのみダウンロード（動画はスキップ）
+      const command = `yt-dlp --skip-download --write-subs --sub-langs live_chat -o "${outputTemplate}" --no-playlist "${url}"`;
+
+      const child = exec(command, { maxBuffer: 1024 * 1024 * 50 }); // 50MB
+
+      child.stdout.on('data', (data) => {
+        const output = data.toString();
+        console.log('[LiveChat DL]', output);
+        if (onProgress) {
+          onProgress({ status: 'downloading', output });
+        }
+      });
+
+      child.stderr.on('data', (data) => {
+        const output = data.toString();
+        console.error('[LiveChat DL stderr]', output);
+        if (onProgress) {
+          onProgress({ status: 'downloading', output });
+        }
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          // ダウンロードされたライブチャットファイルを探す
+          const liveChatPath = path.join(this.downloadDir, `${videoId}.live_chat.json`);
+          if (fs.existsSync(liveChatPath)) {
+            try {
+              const parsed = this.parseLiveChatData(liveChatPath);
+              resolve({
+                success: true,
+                filePath: liveChatPath,
+                commentCount: parsed.length,
+                message: `ライブチャットデータをダウンロードしました（${parsed.length}件）`
+              });
+            } catch (parseError) {
+              resolve({
+                success: true,
+                filePath: liveChatPath,
+                commentCount: 0,
+                message: `ライブチャットデータをダウンロードしましたが、パースに失敗しました: ${parseError.message}`
+              });
+            }
+          } else {
+            reject(new Error('ライブチャットデータが見つかりません。この動画にはライブチャットが存在しない可能性があります。'));
+          }
+        } else {
+          reject(new Error(`ライブチャットのダウンロードに失敗しました (exit code: ${code})`));
+        }
+      });
+
+      child.on('error', (error) => {
+        reject(new Error(`ライブチャットダウンロードエラー: ${error.message}`));
+      });
+    });
+  }
+
+  /**
+   * ライブチャットのJSONLファイルを解析して構造化データに変換
+   * @param {string} filePath - ライブチャットJSONLファイルのパス
+   * @returns {Array<Object>} パース済みコメントデータの配列
+   */
+  parseLiveChatData(filePath) {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split('\n');
+    const comments = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const entry = JSON.parse(line);
+        const action = entry.replayChatItemAction;
+        if (!action) continue;
+
+        // オフセット時間（マイクロ秒 → 秒）
+        const offsetTimeMsec = parseInt(action.videoOffsetTimeMsec) || 0;
+        const offsetTimeSec = offsetTimeMsec / 1000;
+
+        // チャットアイテムを取得
+        const actions = action.actions;
+        if (!actions || actions.length === 0) continue;
+
+        for (const act of actions) {
+          const addAction = act.addChatItemAction;
+          if (!addAction || !addAction.item) continue;
+
+          const item = addAction.item;
+
+          // テキストメッセージを抽出
+          const renderer = item.liveChatTextMessageRenderer;
+          if (renderer) {
+            const messageText = this._extractMessageText(renderer.message);
+            const authorName = renderer.authorName?.simpleText || '不明';
+
+            comments.push({
+              type: 'text',
+              offsetTimeSec,
+              offsetTimeMsec,
+              author: authorName,
+              message: messageText,
+              timestamp: renderer.timestampText?.simpleText || ''
+            });
+            continue;
+          }
+
+          // スーパーチャット（投げ銭）メッセージ
+          const paidRenderer = item.liveChatPaidMessageRenderer;
+          if (paidRenderer) {
+            const messageText = this._extractMessageText(paidRenderer.message);
+            const authorName = paidRenderer.authorName?.simpleText || '不明';
+            const amount = paidRenderer.purchaseAmountText?.simpleText || '';
+
+            comments.push({
+              type: 'superchat',
+              offsetTimeSec,
+              offsetTimeMsec,
+              author: authorName,
+              message: messageText,
+              amount,
+              timestamp: paidRenderer.timestampText?.simpleText || ''
+            });
+            continue;
+          }
+
+          // スーパーステッカー
+          const stickerRenderer = item.liveChatPaidStickerRenderer;
+          if (stickerRenderer) {
+            const authorName = stickerRenderer.authorName?.simpleText || '不明';
+            const amount = stickerRenderer.purchaseAmountText?.simpleText || '';
+
+            comments.push({
+              type: 'supersticker',
+              offsetTimeSec,
+              offsetTimeMsec,
+              author: authorName,
+              message: '[スーパーステッカー]',
+              amount,
+              timestamp: stickerRenderer.timestampText?.simpleText || ''
+            });
+          }
+        }
+      } catch (e) {
+        // パースに失敗した行はスキップ
+        continue;
+      }
+    }
+
+    // オフセット時間でソート
+    comments.sort((a, b) => a.offsetTimeSec - b.offsetTimeSec);
+    return comments;
+  }
+
+  /**
+   * メッセージオブジェクトからテキストを抽出
+   * @param {Object} message - メッセージオブジェクト（runs配列を含む）
+   * @returns {string} 結合されたテキスト
+   * @private
+   */
+  _extractMessageText(message) {
+    if (!message || !message.runs) return '';
+    return message.runs.map(run => {
+      if (run.text) return run.text;
+      if (run.emoji) return run.emoji.shortcuts?.[0] || run.emoji.emojiId || '';
+      return '';
+    }).join('');
+  }
+
+  /**
+   * パース済みライブチャットデータを取得
+   * 既にダウンロード済みのファイルからコメントを読み込んで返す
+   * @param {string} videoId - YouTube動画のID
+   * @returns {Object} コメントデータ（comments配列とメタ情報）
+   */
+  getLiveChatData(videoId) {
+    const liveChatPath = path.join(this.downloadDir, `${videoId}.live_chat.json`);
+    
+    if (!fs.existsSync(liveChatPath)) {
+      return { exists: false, comments: [], message: 'ライブチャットデータが見つかりません' };
+    }
+
+    try {
+      const comments = this.parseLiveChatData(liveChatPath);
+      return {
+        exists: true,
+        comments,
+        commentCount: comments.length,
+        filePath: liveChatPath,
+        message: `${comments.length}件のコメントを読み込みました`
+      };
+    } catch (error) {
+      return { exists: false, comments: [], message: `パースに失敗: ${error.message}` };
+    }
+  }
+
+  /**
+   * コメント密度を計算（時間区間ごとのコメント数）
+   * @param {string} videoId - YouTube動画のID
+   * @param {number} intervalSec - 集計区間（秒）デフォルト5秒
+   * @returns {Object} 密度データ（density配列、最大値、統計情報）
+   */
+  getCommentDensity(videoId, intervalSec = 5) {
+    const chatData = this.getLiveChatData(videoId);
+    if (!chatData.exists || chatData.comments.length === 0) {
+      return { exists: false, density: [], maxCount: 0, totalComments: 0, message: chatData.message };
+    }
+
+    const comments = chatData.comments;
+    const maxTime = comments[comments.length - 1].offsetTimeSec;
+    const bucketCount = Math.ceil(maxTime / intervalSec) + 1;
+    const density = new Array(bucketCount).fill(0);
+
+    // 各コメントを対応するバケットに振り分け
+    for (const comment of comments) {
+      const bucketIndex = Math.floor(comment.offsetTimeSec / intervalSec);
+      if (bucketIndex >= 0 && bucketIndex < bucketCount) {
+        density[bucketIndex]++;
+      }
+    }
+
+    const maxCount = Math.max(...density);
+    const avgCount = comments.length / bucketCount;
+
+    // 密度データを時間付きで返す
+    const densityData = density.map((count, i) => ({
+      startTime: i * intervalSec,
+      endTime: (i + 1) * intervalSec,
+      count
+    }));
+
+    return {
+      exists: true,
+      density: densityData,
+      maxCount,
+      avgCount,
+      totalComments: comments.length,
+      intervalSec,
+      durationSec: maxTime,
+      message: `${comments.length}件のコメントから密度を計算しました（${intervalSec}秒間隔）`
+    };
+  }
+
+  /**
    * ダウンロード済みの動画ファイル一覧を取得
    * @returns {Promise<Array>} ファイル一覧
    */
@@ -307,11 +560,18 @@ class YouTubeDownloader {
             }
           }
           
+          // ライブチャットデータの有無を確認
+          const videoIdMatch = file.match(/([a-zA-Z0-9_-]{11})/);
+          const hasLiveChat = videoIdMatch 
+            ? fs.existsSync(path.join(this.downloadDir, `${videoIdMatch[1]}.live_chat.json`))
+            : false;
+
           return {
             name: file,
             path: filePath,
             stats: fs.statSync(filePath),
-            metadata: metadata
+            metadata: metadata,
+            hasLiveChat: hasLiveChat
           };
         });
 
