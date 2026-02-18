@@ -162,6 +162,16 @@
               <div id="commentDensityContainer" class="comment-density-container" style="display: none;">
                 <canvas id="commentDensityCanvas" class="comment-density-canvas"></canvas>
               </div>
+              <!-- 盛り上がり検出 -->
+              <div id="hotspotSection" class="hotspot-section" style="display: none;">
+                <div class="hotspot-controls">
+                  <span class="hotspot-label">盛り上がり閾値:</span>
+                  <input type="range" id="hotspotThreshold" class="hotspot-slider" min="1.5" max="5" step="0.1" value="2.0">
+                  <span id="hotspotThresholdValue" class="hotspot-threshold-value">×2.0</span>
+                  <span class="hotspot-count" id="hotspotCount"></span>
+                </div>
+                <div id="hotspotList" class="hotspot-list"></div>
+              </div>
               <div id="waveformLoading" class="waveform-loading" style="display: none;">
                 波形を生成中...
               </div>

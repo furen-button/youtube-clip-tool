@@ -102,6 +102,14 @@ const downloadCommentsBtn = document.getElementById('downloadCommentsBtn');
 let commentDensityData = null; // 密度データキャッシュ
 let commentDensityVisible = false;
 
+// 盛り上がり検出関連
+const hotspotSection = document.getElementById('hotspotSection');
+const hotspotThreshold = document.getElementById('hotspotThreshold');
+const hotspotThresholdValue = document.getElementById('hotspotThresholdValue');
+const hotspotCount = document.getElementById('hotspotCount');
+const hotspotList = document.getElementById('hotspotList');
+let detectedHotspots = []; // 検出された盛り上がり箇所
+
 // カテゴリ設定
 const defaultCategories = ['面白い', '感動', '驚き', '癒し', '学び', 'その他'];
 let availableCategories = [...defaultCategories];
@@ -2359,6 +2367,7 @@ async function loadAndShowCommentDensity(autoMode = false) {
     // 密度すでに表示中ならトグルで非表示（自動モードではトグルしない）
     if (!autoMode && commentDensityVisible && commentDensityData) {
       commentDensityContainer.style.display = 'none';
+      hotspotSection.style.display = 'none';
       commentDensityVisible = false;
       loadCommentsBtn.textContent = 'コメント密度';
       showToast('コメント密度表示をOFFにしました', 'info');
@@ -2394,6 +2403,10 @@ async function loadAndShowCommentDensity(autoMode = false) {
     commentDensityContainer.style.display = 'block';
 
     drawCommentDensity();
+
+    // 盛り上がり検出を実行・表示
+    hotspotSection.style.display = 'block';
+    detectAndShowHotspots();
 
     loadCommentsBtn.textContent = 'コメント密度 ON';
     loadCommentsBtn.disabled = false;
@@ -2465,6 +2478,41 @@ function drawCommentDensity() {
   ctx.lineTo(width, avgY);
   ctx.stroke();
   ctx.setLineDash([]);
+
+  // 閾値ラインを描画
+  const threshold = parseFloat(hotspotThreshold.value) || 2.0;
+  const thresholdCount = commentDensityData.avgCount * threshold;
+  if (thresholdCount <= maxCount) {
+    const thresholdRatio = thresholdCount / maxCount;
+    const thresholdY = height - (thresholdRatio * (height - 4)) - 2;
+    ctx.strokeStyle = 'rgba(229, 62, 62, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, thresholdY);
+    ctx.lineTo(width, thresholdY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 盛り上がり箇所のハイライト描画
+  if (detectedHotspots.length > 0) {
+    for (const hotspot of detectedHotspots) {
+      const xStart = (hotspot.startTime / videoDuration) * width;
+      const xEnd = (hotspot.endTime / videoDuration) * width;
+      const hsWidth = Math.max(xEnd - xStart, 2);
+
+      // 三角マーカーを上部に描画
+      ctx.fillStyle = 'rgba(229, 62, 62, 0.9)';
+      const centerX = xStart + hsWidth / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX - 4, 0);
+      ctx.lineTo(centerX + 4, 0);
+      ctx.lineTo(centerX, 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 }
 
 /**
@@ -2530,6 +2578,116 @@ async function downloadLiveChatData() {
 // コメント密度ボタンのイベントリスナー
 loadCommentsBtn.addEventListener('click', () => loadAndShowCommentDensity(false));
 downloadCommentsBtn.addEventListener('click', downloadLiveChatData);
+
+// 盛り上がり閾値スライダーのイベント
+hotspotThreshold.addEventListener('input', () => {
+  const val = parseFloat(hotspotThreshold.value);
+  hotspotThresholdValue.textContent = `×${val.toFixed(1)}`;
+  detectAndShowHotspots();
+  drawCommentDensity(); // 閾値ライン再描画
+});
+
+/**
+ * 盛り上がり箇所を検出してリスト表示
+ */
+function detectAndShowHotspots() {
+  if (!commentDensityData || !commentDensityData.density) {
+    detectedHotspots = [];
+    hotspotList.innerHTML = '';
+    hotspotCount.textContent = '';
+    return;
+  }
+
+  const threshold = parseFloat(hotspotThreshold.value) || 2.0;
+  const { density, avgCount, maxCount, intervalSec } = commentDensityData;
+  const thresholdCount = avgCount * threshold;
+
+  // 閾値を超える連続区間をグループ化
+  const hotspots = [];
+  let currentGroup = null;
+
+  for (const bucket of density) {
+    if (bucket.count >= thresholdCount) {
+      if (currentGroup) {
+        // 連続区間を拡張
+        currentGroup.endTime = bucket.endTime;
+        currentGroup.peakCount = Math.max(currentGroup.peakCount, bucket.count);
+        currentGroup.totalCount += bucket.count;
+        currentGroup.bucketCount++;
+      } else {
+        // 新しいグループ開始
+        currentGroup = {
+          startTime: bucket.startTime,
+          endTime: bucket.endTime,
+          peakCount: bucket.count,
+          totalCount: bucket.count,
+          bucketCount: 1
+        };
+      }
+    } else {
+      if (currentGroup) {
+        hotspots.push(currentGroup);
+        currentGroup = null;
+      }
+    }
+  }
+  if (currentGroup) {
+    hotspots.push(currentGroup);
+  }
+
+  // ピークの高い順にソート
+  hotspots.sort((a, b) => b.peakCount - a.peakCount);
+  detectedHotspots = hotspots;
+
+  // UIに結果を表示
+  hotspotCount.textContent = `${hotspots.length}箇所検出`;
+
+  if (hotspots.length === 0) {
+    hotspotList.innerHTML = '<span style="font-size:0.8rem; color:#718096;">盛り上がり箇所なし（閾値を下げてください）</span>';
+    return;
+  }
+
+  hotspotList.innerHTML = hotspots.map((hs, i) => {
+    const intensity = hs.peakCount / maxCount;
+    const chipClass = intensity > 0.7 ? 'hotspot-chip-hot' : 'hotspot-chip-warm';
+    const durationSec = hs.endTime - hs.startTime;
+    return `
+      <button class="hotspot-chip ${chipClass}" 
+              onclick="jumpToHotspot(${hs.startTime}, ${hs.endTime})"
+              title="ピーク: ${hs.peakCount}件/${intervalSec}秒 | 区間: ${formatTimeShort(hs.startTime)} ~ ${formatTimeShort(hs.endTime)}">
+        <span class="hotspot-chip-time">${formatTimeShort(hs.startTime)}</span>
+        <span class="hotspot-chip-count">${durationSec}s / ${hs.peakCount}peak</span>
+      </button>
+    `;
+  }).join('');
+}
+
+/**
+ * 盛り上がり箇所にジャンプ（クリック時の処理）
+ * @param {number} startTime - 開始時間（秒）
+ * @param {number} endTime - 終了時間（秒）
+ */
+function jumpToHotspot(startTime, endTime) {
+  if (!videoPlayer.duration) return;
+  
+  // 再生位置をジャンプ
+  videoPlayer.currentTime = Math.max(0, startTime - 2); // 2秒前から
+  if (videoPlayer.paused) {
+    videoPlayer.play().catch(e => console.error('再生エラー:', e));
+  }
+  showToast(`盛り上がり箇所にジャンプ: ${formatTimeShort(startTime)}`, 'info', 2000);
+}
+
+/**
+ * 短い時間フォーマット（m:ss 形式）
+ * @param {number} seconds - 秒数
+ * @returns {string} フォーマット済み文字列
+ */
+function formatTimeShort(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 // ウィンドウリサイズ時にCanvas再描画
 window.addEventListener('resize', () => {

@@ -652,6 +652,96 @@ section h2 {
   display: block;
 }
 
+/* 盛り上がり検出セクション */
+.hotspot-section {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.hotspot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hotspot-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2d3748;
+  white-space: nowrap;
+}
+
+.hotspot-slider {
+  width: 120px;
+  height: 4px;
+  accent-color: #e53e3e;
+  cursor: pointer;
+}
+
+.hotspot-threshold-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e53e3e;
+  min-width: 36px;
+}
+
+.hotspot-count {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-left: auto;
+}
+
+.hotspot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 70px;
+  overflow-y: auto;
+}
+
+.hotspot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s, box-shadow 0.1s;
+  white-space: nowrap;
+}
+
+.hotspot-chip:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.hotspot-chip-hot {
+  background-color: #fed7d7;
+  color: #c53030;
+}
+
+.hotspot-chip-warm {
+  background-color: #fefcbf;
+  color: #975a16;
+}
+
+.hotspot-chip-time {
+  font-weight: 600;
+}
+
+.hotspot-chip-count {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
 /* コントロール内の区切り */
 .controls-divider {
   color: #cbd5e0;
