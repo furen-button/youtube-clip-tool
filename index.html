@@ -110,7 +110,47 @@
               左の「ダウンロード済み動画選択」タブから動画を選択してください
             </div>
             <video id="videoPlayer" controls class="video-player" style="display: none;"></video>
+            <!-- サムネイル取得専用の非表示 video（メイン再生に影響を与えない） -->
+            <video id="thumbnailVideo" style="display:none;" muted preload="auto"></video>
             <div class="video-info" id="videoInfo"></div>
+
+            <!-- クリップパネル: タイトル・時間範囲・URL・主要アクション -->
+            <div class="clip-panel" id="clipPanel" style="display: none;">
+              <div class="clip-panel__header">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                <span>クリップ情報</span>
+              </div>
+
+              <div class="clip-panel__body">
+                <div class="clip-panel__field">
+                  <label for="clipTitle">タイトル</label>
+                  <input type="text" id="clipTitle" class="clip-panel__input" placeholder="クリップのタイトルを入力">
+                </div>
+
+                <div class="clip-panel__range">
+                  <span id="clipPanelStart">0:00.000</span>
+                  <span class="clip-panel__range-sep">〜</span>
+                  <span id="clipPanelEnd">0:00.000</span>
+                  <span class="clip-panel__duration" id="clipPanelDuration">(0.000秒)</span>
+                </div>
+
+                <div class="clip-panel__field clip-panel__field--url">
+                  <label>クリップURL</label>
+                  <div class="clip-panel__url-row">
+                    <input type="text" id="clipPanelUrl" class="clip-panel__input" readonly>
+                    <button id="clipPanelCopyUrlBtn" class="btn btn-sm btn-secondary" title="URLをクリップボードにコピー">コピー</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="clip-panel__actions">
+                <button id="clipPanelSaveBtn" class="btn btn-primary btn-sm">💾 JSON保存</button>
+                <button id="clipPanelExportBtn" class="btn btn-success btn-sm">🎬 MP4エクスポート</button>
+              </div>
+            </div>
           </div>
 
           <!-- 右側: コントロールエリア（スクロール可能） -->
@@ -132,30 +172,44 @@
                 </div>
               </div>
               
-              <!-- 時間表示とループチェックボックス -->
-              <div class="time-display-compact">
-                <div class="time-row">
-                  <div class="time-item-compact">
-                    <label>開始</label>
-                    <span id="startTimeDisplay" class="time-value">0:00.000</span>
+              <!-- ループチェックボックス（時間表示はクリップタイムライン/パネルで代替） -->
+              <div class="trimming-toolbar">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="loopCheckbox" checked>
+                  <span>ループ再生</span>
+                </label>
+              </div>
+              
+              <!-- クリップタイムラインバー -->
+              <div class="clip-timeline-wrapper">
+                <!-- 全体ビュー（動画全長のミニマップ） -->
+                <div class="clip-overview" id="clipOverview" title="クリックで再生位置を移動 / ドラッグで表示範囲を移動">
+                  <div class="clip-overview__track" id="clipOverviewTrack">
+                    <div class="clip-overview__selection" id="clipOverviewSelection"></div>
+                    <div class="clip-overview__viewport" id="clipOverviewViewport"></div>
+                    <div class="clip-overview__playhead" id="clipOverviewPlayhead"></div>
                   </div>
-                  <div class="time-item-compact">
-                    <label>終了</label>
-                    <span id="endTimeDisplay" class="time-value">0:00.000</span>
+                  <div class="clip-overview__labels">
+                    <span class="clip-overview__label" id="clipOverviewStart">0:00</span>
+                    <span class="clip-overview__label clip-overview__label--center" id="clipOverviewRange">全体表示中</span>
+                    <span class="clip-overview__label" id="clipOverviewEnd">0:00</span>
                   </div>
-                  <div class="time-item-compact">
-                    <label>本編時間</label>
-                    <span id="durationDisplay" class="time-value">0:00.000</span>
-                  </div>
-                  <div class="time-item-compact">
-                    <label class="checkbox-label">
-                      <input type="checkbox" id="loopCheckbox" checked>
-                      <span>ループ</span>
-                    </label>
+                </div>
+                <!-- メインタイムライン（波形と同じ表示範囲） -->
+                <div class="clip-timeline" id="clipTimeline">
+                  <div class="clip-timeline__track" id="clipTrack">
+                    <div class="clip-timeline__selection" id="clipSelection"></div>
+                    <div class="clip-timeline__handle clip-timeline__handle--start" id="clipHandleStart">
+                      <span class="clip-timeline__time" id="clipStartTime">0:00</span>
+                    </div>
+                    <div class="clip-timeline__handle clip-timeline__handle--end" id="clipHandleEnd">
+                      <span class="clip-timeline__time" id="clipEndTime">0:00</span>
+                    </div>
+                    <div class="clip-timeline__playhead" id="clipPlayhead"></div>
                   </div>
                 </div>
               </div>
-              
+
               <!-- 音声波形 -->
               <div id="waveform" class="waveform-container"></div>
               <!-- コメント密度オーバーレイ -->
@@ -210,38 +264,11 @@
                 </div>
               </div>
               
-              <!-- 範围スライダー -->
-              <div class="range-slider-container">
-                <div class="range-slider-wrapper">
-                  <input 
-                    type="range" 
-                    id="startSlider" 
-                    class="range-slider range-slider-start" 
-                    min="0" 
-                    max="100" 
-                    value="0" 
-                    step="0.01"
-                  >
-                  <input 
-                    type="range" 
-                    id="endSlider" 
-                    class="range-slider range-slider-end" 
-                    min="0" 
-                    max="100" 
-                    value="100" 
-                    step="0.01"
-                  >
-                  <div class="range-slider-track">
-                    <div class="range-slider-highlight" id="rangeHighlight"></div>
-                  </div>
-                </div>
-              </div>
               
               <!-- アクションボタン -->
               <div class="trimming-actions-compact">
                 <button id="setStartBtn" class="btn btn-primary btn-sm">現在位置を開始に</button>
                 <button id="setEndBtn" class="btn btn-primary btn-sm">現在位置を終了に</button>
-                <button id="playTrimmedBtn" class="btn btn-success btn-sm">範囲を再生</button>
               </div>
             </div>
 
@@ -289,10 +316,7 @@
 
             <div class="form-group">
               <label for="clipUrl">クリップURL</label>
-              <div class="input-with-button">
-                <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10">
-                <button id="generateClipUrlBtn" class="btn btn-info btn-sm" title="Video IDと開始時間からURL生成">URL生成</button>
-              </div>
+              <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10">
             </div>
 
             <div class="form-group">
@@ -374,6 +398,12 @@
 
   <!-- トースト通知コンテナ -->
   <div id="toastContainer" class="toast-container"></div>
+
+  <!-- タイムラインホバー時のサムネイルプレビュー -->
+  <div class="clip-thumbnail-tooltip" id="clipThumbnailTooltip" style="display:none;">
+    <canvas class="clip-thumbnail-canvas" id="clipThumbnailCanvas" width="160" height="90"></canvas>
+    <span class="clip-thumbnail-time" id="clipThumbnailTime">0:00.000</span>
+  </div>
 
   <script src="renderer.js"></script>
 </body>

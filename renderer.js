@@ -28,15 +28,25 @@ const zoomToTrimBtn = document.getElementById('zoomToTrimBtn');
 const resetZoomBtn = document.getElementById('resetZoomBtn');
 
 // トリミング関連の要素
-const startSlider = document.getElementById('startSlider');
-const endSlider = document.getElementById('endSlider');
-const startTimeDisplay = document.getElementById('startTimeDisplay');
-const endTimeDisplay = document.getElementById('endTimeDisplay');
-const durationDisplay = document.getElementById('durationDisplay');
-const rangeHighlight = document.getElementById('rangeHighlight');
+const clipTimeline = document.getElementById('clipTimeline');
+const clipTrack = document.getElementById('clipTrack');
+const clipSelection = document.getElementById('clipSelection');
+const clipHandleStart = document.getElementById('clipHandleStart');
+const clipHandleEnd = document.getElementById('clipHandleEnd');
+const clipPlayhead = document.getElementById('clipPlayhead');
+const clipStartTimeLabel = document.getElementById('clipStartTime');
+const clipEndTimeLabel = document.getElementById('clipEndTime');
+// 全体ビュー（オーバービュー）の要素
+const clipOverview = document.getElementById('clipOverview');
+const clipOverviewTrack = document.getElementById('clipOverviewTrack');
+const clipOverviewSelection = document.getElementById('clipOverviewSelection');
+const clipOverviewViewport = document.getElementById('clipOverviewViewport');
+const clipOverviewPlayhead = document.getElementById('clipOverviewPlayhead');
+const clipOverviewStart = document.getElementById('clipOverviewStart');
+const clipOverviewEnd = document.getElementById('clipOverviewEnd');
+const clipOverviewRange = document.getElementById('clipOverviewRange');
 const setStartBtn = document.getElementById('setStartBtn');
 const setEndBtn = document.getElementById('setEndBtn');
-const playTrimmedBtn = document.getElementById('playTrimmedBtn');
 const loopCheckbox = document.getElementById('loopCheckbox');
 
 // メタデータ関連の要素
@@ -50,7 +60,6 @@ const categoryButtons = document.getElementById('categoryButtons');
 const selectedCategoriesDiv = document.getElementById('selectedCategories');
 const generateFileNameBtn = document.getElementById('generateFileNameBtn');
 const generateRubyBtn = document.getElementById('generateRubyBtn');
-const generateClipUrlBtn = document.getElementById('generateClipUrlBtn');
 const saveMetadataBtn = document.getElementById('saveMetadataBtn');
 const clearMetadataBtn = document.getElementById('clearMetadataBtn');
 const exportVideoBtn = document.getElementById('exportVideoBtn');
@@ -78,6 +87,13 @@ let trimState = {
   endTime: 0,
   duration: 0,
   isLooping: true
+};
+
+// クリップタイムラインの表示範囲（波形のズーム範囲と同期）
+// メインタイムラインバーは [viewStartTime, viewEndTime] の範囲を表示する
+let clipViewState = {
+  viewStartTime: 0,
+  viewEndTime: 0
 };
 
 // メタデータ状態
@@ -633,6 +649,11 @@ async function playVideo(fileIndex) {
     }
     
     videoPlayer.src = url;
+    // サムネイルプレビュー用video にも同じURLをセット
+    const thumbVideo = document.getElementById('thumbnailVideo');
+    if (thumbVideo) {
+      thumbVideo.src = url;
+    }
     previewSection.style.display = 'block';
     videoPlayer.style.display = 'block';
     document.getElementById('editTabMessage').style.display = 'none';
@@ -803,37 +824,124 @@ function formatTimeWithMillis(seconds) {
 function updateTrimDisplay() {
   const videoDuration = videoPlayer.duration || 0;
   
-  trimState.startTime = (startSlider.value / 100) * videoDuration;
-  trimState.endTime = (endSlider.value / 100) * videoDuration;
   trimState.duration = trimState.endTime - trimState.startTime;
   
-  startTimeDisplay.textContent = formatTimeWithMillis(trimState.startTime);
-  endTimeDisplay.textContent = formatTimeWithMillis(trimState.endTime);
-  durationDisplay.textContent = formatTimeWithMillis(trimState.duration);
-  
-  // ハイライト表示を更新
-  updateRangeHighlight();
-  
-  // ファイル名を自動更新
-  autoGenerateFileName();
-  
-  // クリップURLを自動更新
-  autoGenerateClipUrl();
-}
-
-// 範囲ハイライトの表示を更新
-function updateRangeHighlight() {
-  const startPercent = parseFloat(startSlider.value);
-  const endPercent = parseFloat(endSlider.value);
-  
-  rangeHighlight.style.left = `${startPercent}%`;
-  rangeHighlight.style.width = `${endPercent - startPercent}%`;
+  // タイムラインバーの表示を更新
+  updateClipTimelineUI();
   
   // 波形のregionを更新
   updateWaveformRegion();
   
   // 波形のズームを更新
   updateWaveformZoom();
+  
+  // ファイル名を自動更新
+  autoGenerateFileName();
+  
+  // クリップURLを自動更新
+  autoGenerateClipUrl();
+  
+  // クリップパネルを更新
+  updateClipPanel();
+}
+
+// クリップタイムラインバーの表示を更新
+function updateClipTimelineUI() {
+  const videoDuration = videoPlayer.duration || 0;
+  if (!videoDuration) return;
+  
+  const viewStart = clipViewState.viewStartTime;
+  const viewEnd = clipViewState.viewEndTime || videoDuration;
+  const viewDuration = Math.max(0.001, viewEnd - viewStart);
+  
+  // メインタイムライン: viewStart〜viewEnd の範囲を 0%〜100% にマッピング
+  const startPercent = ((trimState.startTime - viewStart) / viewDuration) * 100;
+  const endPercent = ((trimState.endTime - viewStart) / viewDuration) * 100;
+  
+  // 表示範囲外でもハンドルが見切れないようclamp
+  const clampedStart = Math.max(-1, Math.min(101, startPercent));
+  const clampedEnd = Math.max(-1, Math.min(101, endPercent));
+  
+  clipHandleStart.style.left = `${clampedStart}%`;
+  clipHandleEnd.style.left = `${clampedEnd}%`;
+  
+  // 選択範囲（表示範囲内のみ）
+  const selStart = Math.max(0, Math.min(100, startPercent));
+  const selEnd = Math.max(0, Math.min(100, endPercent));
+  clipSelection.style.left = `${selStart}%`;
+  clipSelection.style.width = `${Math.max(0, selEnd - selStart)}%`;
+  
+  // 表示範囲外なら半透明にしてユーザーに知らせる
+  const startVisible = startPercent >= 0 && startPercent <= 100;
+  const endVisible = endPercent >= 0 && endPercent <= 100;
+  clipHandleStart.style.opacity = startVisible ? '1' : '0.3';
+  clipHandleEnd.style.opacity = endVisible ? '1' : '0.3';
+  
+  // 時刻表示を更新
+  clipStartTimeLabel.textContent = formatTimeWithMillis(trimState.startTime);
+  clipEndTimeLabel.textContent = formatTimeWithMillis(trimState.endTime);
+  
+  // オーバービューも更新
+  updateClipOverviewUI();
+}
+
+// 全体ビュー（オーバービュー）の表示を更新
+function updateClipOverviewUI() {
+  const videoDuration = videoPlayer.duration || 0;
+  if (!videoDuration) return;
+  
+  // 選択範囲を全体に対する割合で表示
+  const selStartPct = (trimState.startTime / videoDuration) * 100;
+  const selEndPct = (trimState.endTime / videoDuration) * 100;
+  clipOverviewSelection.style.left = `${selStartPct}%`;
+  clipOverviewSelection.style.width = `${Math.max(0.2, selEndPct - selStartPct)}%`;
+  
+  // ビューポート（メインタイムラインの表示範囲）を全体に対して表示
+  const viewStart = clipViewState.viewStartTime;
+  const viewEnd = clipViewState.viewEndTime || videoDuration;
+  const viewStartPct = (viewStart / videoDuration) * 100;
+  const viewEndPct = (viewEnd / videoDuration) * 100;
+  clipOverviewViewport.style.left = `${viewStartPct}%`;
+  clipOverviewViewport.style.width = `${Math.max(0.5, viewEndPct - viewStartPct)}%`;
+  
+  // ラベル
+  clipOverviewStart.textContent = formatTimeShort(viewStart);
+  clipOverviewEnd.textContent = formatTimeShort(viewEnd);
+  const viewDur = viewEnd - viewStart;
+  if (Math.abs(viewDur - videoDuration) < 0.5) {
+    clipOverviewRange.textContent = '全体表示中';
+  } else {
+    clipOverviewRange.textContent = `表示範囲: ${formatTimeShort(viewDur)}`;
+  }
+}
+
+/**
+ * クリップパネルを更新（時刻範囲・URL・パネル表示制御）
+ */
+const clipPanelEl = document.getElementById('clipPanel');
+const clipTitleInput = document.getElementById('clipTitle');
+const clipPanelStart = document.getElementById('clipPanelStart');
+const clipPanelEnd = document.getElementById('clipPanelEnd');
+const clipPanelDuration = document.getElementById('clipPanelDuration');
+const clipPanelUrl = document.getElementById('clipPanelUrl');
+
+function updateClipPanel() {
+  if (!videoPlayer.duration) {
+    clipPanelEl.style.display = 'none';
+    return;
+  }
+  
+  clipPanelEl.style.display = 'block';
+  
+  const { startTime, endTime } = trimState;
+  const dur = endTime - startTime;
+  
+  clipPanelStart.textContent = formatTimeWithMillis(startTime);
+  clipPanelEnd.textContent = formatTimeWithMillis(endTime);
+  clipPanelDuration.textContent = `(${dur.toFixed(3)}秒)`;
+  
+  // URL は autoGenerateClipUrl() が clipUrlInput を更新するのでそこから取得
+  clipPanelUrl.value = clipUrlInput.value || '';
 }
 
 // 波形をトリミング範囲にズーム
@@ -854,6 +962,10 @@ function updateWaveformZoom() {
   try {
     wavesurfer.zoom(zoomLevel);
     wavesurfer.setScrollTime(displayStartTime);
+    // クリップタイムラインの表示範囲も波形と同期
+    clipViewState.viewStartTime = displayStartTime;
+    clipViewState.viewEndTime = displayEndTime;
+    updateClipTimelineUI();
   } catch (error) {
     console.error('ズームエラー:', error);
   }
@@ -886,47 +998,349 @@ function cycleZoomPadding() {
   showToast(`ズームパディング: ${paddingText}`, 'info');
 }
 
-// トリミングスライダーの初期化
+// トリミングの初期化
 function initTrimSliders() {
   if (!videoPlayer.duration) return;
   
   const duration = videoPlayer.duration;
+  trimState.startTime = 0;
   trimState.endTime = duration;
-  endSlider.value = 100;
-  startSlider.value = 0;
+  
+  // 表示範囲を全体に初期化
+  clipViewState.viewStartTime = 0;
+  clipViewState.viewEndTime = duration;
   
   updateTrimDisplay();
+  initClipTimeline();
 }
 
-// 開始位置スライダーの変更
-startSlider.addEventListener('input', () => {
-  // 開始位置が終了位置を超えないようにする
-  if (parseFloat(startSlider.value) >= parseFloat(endSlider.value)) {
-    startSlider.value = Math.max(0, parseFloat(endSlider.value) - 0.01);
-  }
-  updateTrimDisplay();
+/**
+ * クリップタイムラインバーの初期化（ドラッグ処理）
+ */
+let clipTimelineInitialized = false;
+function initClipTimeline() {
+  if (clipTimelineInitialized) return;
+  clipTimelineInitialized = true;
   
-  // ループ再生をONにして範囲の頭から再生
-  trimState.isLooping = true;
-  loopCheckbox.checked = true;
-  videoPlayer.currentTime = trimState.startTime;
-  videoPlayer.play().catch(e => console.error('再生エラー:', e));
-});
+  let activeHandle = null; // 'start' | 'end' | 'selection' | 'overview-viewport' | null
+  let dragStartX = 0;
+  let dragStartStartTime = 0;
+  let dragStartEndTime = 0;
+  let dragStartViewStart = 0;
+  let dragStartViewEnd = 0;
 
-// 終了位置スライダーの変更
-endSlider.addEventListener('input', () => {
-  // 終了位置が開始位置より前にならないようにする
-  if (parseFloat(endSlider.value) <= parseFloat(startSlider.value)) {
-    endSlider.value = Math.min(100, parseFloat(startSlider.value) + 0.01);
+  // メインタイムラインの X座標 → 時間（表示範囲を考慮）
+  function getTimeFromX(clientX) {
+    const rect = clipTrack.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const ratio = x / rect.width;
+    const viewStart = clipViewState.viewStartTime;
+    const viewEnd = clipViewState.viewEndTime || (videoPlayer.duration || 0);
+    return viewStart + ratio * (viewEnd - viewStart);
   }
-  updateTrimDisplay();
+
+  // オーバービューの X座標 → 時間（動画全体）
+  function getOverviewTimeFromX(clientX) {
+    const rect = clipOverviewTrack.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    return (x / rect.width) * (videoPlayer.duration || 0);
+  }
+
+  // 開始ハンドルのドラッグ
+  clipHandleStart.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeHandle = 'start';
+    clipHandleStart.setPointerCapture(e.pointerId);
+  });
+
+  // 終了ハンドルのドラッグ
+  clipHandleEnd.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeHandle = 'end';
+    clipHandleEnd.setPointerCapture(e.pointerId);
+  });
+
+  // 選択範囲のドラッグ（全体移動）
+  clipSelection.style.pointerEvents = 'auto';
+  clipSelection.style.cursor = 'grab';
+  clipSelection.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeHandle = 'selection';
+    dragStartX = e.clientX;
+    dragStartStartTime = trimState.startTime;
+    dragStartEndTime = trimState.endTime;
+    clipSelection.setPointerCapture(e.pointerId);
+    clipSelection.style.cursor = 'grabbing';
+  });
+
+  // オーバービューのビューポートをドラッグして表示範囲を移動
+  clipOverviewViewport.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeHandle = 'overview-viewport';
+    dragStartX = e.clientX;
+    dragStartViewStart = clipViewState.viewStartTime;
+    dragStartViewEnd = clipViewState.viewEndTime;
+    clipOverviewViewport.setPointerCapture(e.pointerId);
+  });
+
+  // オーバービューのトラッククリックで再生位置を移動
+  clipOverviewTrack.addEventListener('click', (e) => {
+    if (e.target === clipOverviewViewport) return;
+    if (!videoPlayer.duration) return;
+    const newTime = getOverviewTimeFromX(e.clientX);
+    videoPlayer.currentTime = newTime;
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(err => console.error('再生エラー:', err));
+    }
+  });
+
+  // ドラッグ中の処理
+  document.addEventListener('pointermove', (e) => {
+    if (!activeHandle || !videoPlayer.duration) return;
+    
+    const duration = videoPlayer.duration;
+
+    if (activeHandle === 'start') {
+      let newStart = getTimeFromX(e.clientX);
+      newStart = Math.max(0, Math.min(newStart, trimState.endTime - 0.1));
+      trimState.startTime = newStart;
+      updateTrimDisplay();
+    } else if (activeHandle === 'end') {
+      let newEnd = getTimeFromX(e.clientX);
+      newEnd = Math.max(trimState.startTime + 0.1, Math.min(newEnd, duration));
+      trimState.endTime = newEnd;
+      updateTrimDisplay();
+    } else if (activeHandle === 'selection') {
+      const rect = clipTrack.getBoundingClientRect();
+      const viewDur = (clipViewState.viewEndTime || duration) - clipViewState.viewStartTime;
+      const deltaX = e.clientX - dragStartX;
+      const deltaTime = (deltaX / rect.width) * viewDur;
+      const rangeDuration = dragStartEndTime - dragStartStartTime;
+      
+      let newStart = dragStartStartTime + deltaTime;
+      let newEnd = dragStartEndTime + deltaTime;
+      
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = rangeDuration;
+      }
+      if (newEnd > duration) {
+        newEnd = duration;
+        newStart = duration - rangeDuration;
+      }
+      
+      trimState.startTime = newStart;
+      trimState.endTime = newEnd;
+      updateTrimDisplay();
+    } else if (activeHandle === 'overview-viewport') {
+      // ビューポートドラッグ → メインタイムラインの表示範囲を移動
+      const overviewRect = clipOverviewTrack.getBoundingClientRect();
+      const deltaX = e.clientX - dragStartX;
+      const deltaTime = (deltaX / overviewRect.width) * duration;
+      const viewDur = dragStartViewEnd - dragStartViewStart;
+      
+      let newViewStart = dragStartViewStart + deltaTime;
+      let newViewEnd = dragStartViewEnd + deltaTime;
+      
+      if (newViewStart < 0) {
+        newViewStart = 0;
+        newViewEnd = viewDur;
+      }
+      if (newViewEnd > duration) {
+        newViewEnd = duration;
+        newViewStart = duration - viewDur;
+      }
+      
+      setClipView(newViewStart, newViewEnd, true);
+    }
+  });
+
+  // ドラッグ終了
+  document.addEventListener('pointerup', (e) => {
+    if (!activeHandle) return;
+    
+    const wasHandle = activeHandle;
+    activeHandle = null;
+    clipSelection.style.cursor = 'grab';
+    
+    // ドラッグ終了後に自動再生（ハンドル系のみ）
+    if (wasHandle === 'start') {
+      trimState.isLooping = true;
+      loopCheckbox.checked = true;
+      videoPlayer.currentTime = trimState.startTime;
+      videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    } else if (wasHandle === 'end') {
+      trimState.isLooping = true;
+      loopCheckbox.checked = true;
+      const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
+      videoPlayer.currentTime = playbackTime;
+      videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    }
+  });
+
+  // トラッククリックで再生位置を変更
+  clipTrack.addEventListener('click', (e) => {
+    if (e.target === clipHandleStart || e.target === clipHandleEnd || 
+        e.target === clipSelection || e.target.closest('.clip-timeline__handle')) return;
+    
+    const newTime = getTimeFromX(e.clientX);
+    videoPlayer.currentTime = newTime;
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(err => console.error('再生エラー:', err));
+    }
+  });
+
+  // サムネイルプレビュー（メインタイムライン・オーバービュー両方）
+  initThumbnailPreview(clipTrack, getTimeFromX);
+  initThumbnailPreview(clipOverviewTrack, getOverviewTimeFromX);
+}
+
+/**
+ * メインタイムラインの表示範囲を設定
+ * @param {number} start - 表示開始時間（秒）
+ * @param {number} end - 表示終了時間（秒）
+ * @param {boolean} syncWavesurfer - 波形のズーム/スクロールも連動させるか
+ */
+function setClipView(start, end, syncWavesurfer = false) {
+  const duration = videoPlayer.duration || 0;
+  clipViewState.viewStartTime = Math.max(0, start);
+  clipViewState.viewEndTime = Math.min(duration, end);
+  updateClipTimelineUI();
+  updateClipPlayhead();
   
-  // ループ再生をONにして範囲の最後の2秒前から再生
-  trimState.isLooping = true;
-  loopCheckbox.checked = true;
-  const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
-  videoPlayer.currentTime = playbackTime;
-  videoPlayer.play().catch(e => console.error('再生エラー:', e));
+  if (syncWavesurfer && wavesurfer) {
+    try {
+      const width = waveformContainer.clientWidth;
+      const viewDur = clipViewState.viewEndTime - clipViewState.viewStartTime;
+      if (viewDur > 0) {
+        const zoomLevel = width / viewDur;
+        wavesurfer.zoom(zoomLevel);
+        wavesurfer.setScrollTime(clipViewState.viewStartTime);
+      }
+    } catch (error) {
+      console.error('波形連動エラー:', error);
+    }
+  }
+}
+
+/**
+ * タイムライン要素にホバーサムネイルプレビューを設定
+ * @param {HTMLElement} trackEl - ホバー対象のトラック要素
+ * @param {(clientX: number) => number} timeFromX - X座標から時刻に変換する関数
+ */
+function initThumbnailPreview(trackEl, timeFromX) {
+  const tooltip = document.getElementById('clipThumbnailTooltip');
+  const canvas = document.getElementById('clipThumbnailCanvas');
+  const timeLabel = document.getElementById('clipThumbnailTime');
+  const ctx = canvas.getContext('2d');
+  
+  let pendingTime = null;
+  let isCapturing = false;
+  let lastX = 0;
+  
+  // サムネイルvideoのフレームをキャンバスに描画
+  async function captureFrame(time) {
+    const thumbVideo = document.getElementById('thumbnailVideo');
+    if (!thumbVideo || !thumbVideo.duration) return;
+    
+    isCapturing = true;
+    return new Promise((resolve) => {
+      const onSeeked = () => {
+        try {
+          ctx.drawImage(thumbVideo, 0, 0, canvas.width, canvas.height);
+        } catch (e) {
+          // フレーム未準備時は無視
+        }
+        thumbVideo.removeEventListener('seeked', onSeeked);
+        isCapturing = false;
+        resolve();
+        // 待機していた最新時刻があればそちらをキャプチャ
+        if (pendingTime !== null) {
+          const next = pendingTime;
+          pendingTime = null;
+          captureFrame(next);
+        }
+      };
+      thumbVideo.addEventListener('seeked', onSeeked);
+      thumbVideo.currentTime = Math.max(0, Math.min(time, thumbVideo.duration - 0.001));
+    });
+  }
+  
+  trackEl.addEventListener('mousemove', (e) => {
+    if (!videoPlayer.duration) return;
+    
+    const time = timeFromX(e.clientX);
+    lastX = e.clientX;
+    
+    // ツールチップ位置・時刻表示は即座に更新
+    tooltip.style.display = 'block';
+    tooltip.style.left = `${e.clientX}px`;
+    const rect = trackEl.getBoundingClientRect();
+    tooltip.style.top = `${rect.top}px`;
+    timeLabel.textContent = formatTimeWithMillis(time);
+    
+    // フレームキャプチャはスロットリング
+    if (isCapturing) {
+      pendingTime = time;
+    } else {
+      captureFrame(time);
+    }
+  });
+  
+  trackEl.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    pendingTime = null;
+  });
+}
+
+// 再生ヘッドの更新
+function updateClipPlayhead() {
+  if (!videoPlayer.duration) return;
+  const currentTime = videoPlayer.currentTime;
+  const duration = videoPlayer.duration;
+  
+  // メインタイムライン: 表示範囲内なら表示
+  const viewStart = clipViewState.viewStartTime;
+  const viewEnd = clipViewState.viewEndTime || duration;
+  const viewDur = Math.max(0.001, viewEnd - viewStart);
+  const mainPercent = ((currentTime - viewStart) / viewDur) * 100;
+  
+  if (mainPercent >= 0 && mainPercent <= 100) {
+    clipPlayhead.style.display = 'block';
+    clipPlayhead.style.left = `${mainPercent}%`;
+  } else {
+    clipPlayhead.style.display = 'none';
+  }
+  
+  // オーバービュー: 動画全体に対する位置
+  const overviewPercent = (currentTime / duration) * 100;
+  clipOverviewPlayhead.style.left = `${overviewPercent}%`;
+}
+
+// 再生ヘッドをtimeupdateで同期
+videoPlayer.addEventListener('timeupdate', updateClipPlayhead);
+
+// requestAnimationFrameで滑らかに再生ヘッドを更新
+let playheadAnimationId = null;
+function animatePlayhead() {
+  updateClipPlayhead();
+  if (!videoPlayer.paused) {
+    playheadAnimationId = requestAnimationFrame(animatePlayhead);
+  }
+}
+videoPlayer.addEventListener('play', () => {
+  if (playheadAnimationId) cancelAnimationFrame(playheadAnimationId);
+  animatePlayhead();
+});
+videoPlayer.addEventListener('pause', () => {
+  if (playheadAnimationId) {
+    cancelAnimationFrame(playheadAnimationId);
+    playheadAnimationId = null;
+  }
 });
 
 // 現在位置を開始位置に設定
@@ -934,11 +1348,10 @@ setStartBtn.addEventListener('click', () => {
   if (!videoPlayer.duration) return;
   
   const currentTime = videoPlayer.currentTime;
-  const percentage = (currentTime / videoPlayer.duration) * 100;
   
   // 終了位置より前であることを確認
-  if (percentage < parseFloat(endSlider.value)) {
-    startSlider.value = percentage;
+  if (currentTime < trimState.endTime) {
+    trimState.startTime = currentTime;
     updateTrimDisplay();
     
     // ループ再生をONにして範囲の頭から再生
@@ -956,11 +1369,10 @@ setEndBtn.addEventListener('click', () => {
   if (!videoPlayer.duration) return;
   
   const currentTime = videoPlayer.currentTime;
-  const percentage = (currentTime / videoPlayer.duration) * 100;
   
   // 開始位置より後であることを確認
-  if (percentage > parseFloat(startSlider.value)) {
-    endSlider.value = percentage;
+  if (currentTime > trimState.startTime) {
+    trimState.endTime = currentTime;
     updateTrimDisplay();
     
     // ループ再生をONにして範囲の最後の2秒前から再生
@@ -972,16 +1384,6 @@ setEndBtn.addEventListener('click', () => {
   } else {
     showToast('終了位置は開始位置より後に設定してください', 'warning');
   }
-});
-
-// トリミング範囲を再生
-playTrimmedBtn.addEventListener('click', () => {
-  if (!videoPlayer.duration) return;
-  
-  videoPlayer.currentTime = trimState.startTime;
-  videoPlayer.play();
-  // チェックボックスの状態に合わせる
-  trimState.isLooping = loopCheckbox.checked;
 });
 
 // ループ再生チェックボックスの変更
@@ -1023,9 +1425,8 @@ function adjustStartTime(frames) {
   // 範囲チェック
   newStartTime = Math.max(0, Math.min(newStartTime, trimState.endTime - 0.1));
   
-  // スライダーを更新
-  const newPercentage = (newStartTime / videoPlayer.duration) * 100;
-  startSlider.value = newPercentage;
+  // trimStateを直接更新
+  trimState.startTime = newStartTime;
   updateTrimDisplay();
   
   // ループ再生をONにして開始位置から再生
@@ -1045,9 +1446,8 @@ function adjustEndTime(frames) {
   // 範囲チェック
   newEndTime = Math.max(trimState.startTime + 0.1, Math.min(newEndTime, videoPlayer.duration));
   
-  // スライダーを更新
-  const newPercentage = (newEndTime / videoPlayer.duration) * 100;
-  endSlider.value = newPercentage;
+  // trimStateを直接更新
+  trimState.endTime = newEndTime;
   updateTrimDisplay();
   
   // ループ再生をONにして終了位置の2秒前から再生
@@ -1145,15 +1545,12 @@ function initWaveSurfer() {
         regionUpdateType = 'end';
       }
 
-      // スライダーを更新
-      startSlider.value = (region.start / duration) * 100;
-      endSlider.value = (region.end / duration) * 100;
-
-      // 表示を更新
-      startTimeDisplay.textContent = formatTimeWithMillis(region.start);
-      endTimeDisplay.textContent = formatTimeWithMillis(region.end);
-      durationDisplay.textContent = formatTimeWithMillis(region.end - region.start);
-      updateRangeHighlight();
+      // タイムラインバーの表示を更新
+      updateClipTimelineUI();
+      // ファイル名・URL・クリップパネルも更新
+      autoGenerateFileName();
+      autoGenerateClipUrl();
+      updateClipPanel();
       
       // 既存のタイマーをクリア
       if (regionUpdateTimer) {
@@ -1185,6 +1582,15 @@ function initWaveSurfer() {
   wavesurfer.on('ready', () => {
     waveformLoading.style.display = 'none';
     console.log('WaveSurfer ready');
+  });
+
+  // 波形のスクロール/ズーム変更時にクリップタイムラインの表示範囲も同期
+  wavesurfer.on('scroll', (visibleStartTime, visibleEndTime) => {
+    if (typeof visibleStartTime === 'number' && typeof visibleEndTime === 'number') {
+      clipViewState.viewStartTime = visibleStartTime;
+      clipViewState.viewEndTime = visibleEndTime;
+      updateClipTimelineUI();
+    }
   });
 
   // 波形クリックで再生位置を変更して再生
@@ -1439,14 +1845,6 @@ function katakanaToHiragana(str) {
     return String.fromCharCode(charCode);
   });
 }
-
-// クリップURLの自動生成ボタン（互換性のため残す）
-generateClipUrlBtn.addEventListener('click', () => {
-  autoGenerateClipUrl();
-  if (!metadata.clipUrl) {
-    showToast('Video IDを入力し、動画を読み込んでください', 'warning');
-  }
-});
 
 // メタデータの保存（JSON）
 saveMetadataBtn.addEventListener('click', async () => {
@@ -2694,6 +3092,46 @@ window.addEventListener('resize', () => {
   if (commentDensityVisible && commentDensityData) {
     drawCommentDensity();
   }
+});
+
+/**
+ * クリップパネルのイベント連携
+ */
+// クリップタイトル ↔ セリフ の双方向同期
+clipTitleInput.addEventListener('input', (e) => {
+  serifInput.value = e.target.value;
+  metadata.serif = e.target.value;
+});
+serifInput.addEventListener('input', (e) => {
+  if (clipTitleInput.value !== e.target.value) {
+    clipTitleInput.value = e.target.value;
+  }
+});
+
+// クリップURLコピーボタン
+document.getElementById('clipPanelCopyUrlBtn').addEventListener('click', async () => {
+  const url = clipPanelUrl.value;
+  if (!url) {
+    showToast('URLが生成されていません', 'warning');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('クリップURLをコピーしました', 'success');
+  } catch (error) {
+    showToast('コピーに失敗しました', 'error');
+    console.error(error);
+  }
+});
+
+// JSON保存ボタン（既存の saveMetadataBtn を呼び出す）
+document.getElementById('clipPanelSaveBtn').addEventListener('click', () => {
+  saveMetadataBtn.click();
+});
+
+// MP4エクスポートボタン（既存の exportVideoBtn を呼び出す）
+document.getElementById('clipPanelExportBtn').addEventListener('click', () => {
+  exportVideoBtn.click();
 });
 
 // 初期化
