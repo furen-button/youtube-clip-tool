@@ -131,20 +131,463 @@ const defaultCategories = ['面白い', '感動', '驚き', '癒し', '学び', 
 let availableCategories = [...defaultCategories];
 
 /**
+ * 入力履歴管理ユーティリティ
+ * datalistと連動して、入力値を localStorage に保存・サジェスト表示する
+ */
+const InputHistory = {
+  MAX: 20,
+  STORAGE_PREFIX: 'inputHistory_',
+
+  load(key) {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_PREFIX + key);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      console.error('履歴の読み込みエラー:', e);
+      return [];
+    }
+  },
+
+  save(key, value) {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    let list = this.load(key).filter(v => v !== trimmed);
+    list.unshift(trimmed);
+    if (list.length > this.MAX) list = list.slice(0, this.MAX);
+    try {
+      localStorage.setItem(this.STORAGE_PREFIX + key, JSON.stringify(list));
+    } catch (e) {
+      console.error('履歴の保存エラー:', e);
+    }
+  },
+
+  // input要素ごとのrefresh関数を保持（重複バインド防止用）
+  _bound: new Map(),
+
+  /**
+   * input要素をdatalist履歴と紐付け、自動保存を有効にする
+   * 同じinputに対する2度目以降の呼び出しはrefreshのみ実行する（重複イベント防止）
+   * @param {HTMLInputElement} input - 対象のinput要素
+   * @param {string} key - 履歴のキー
+   * @param {object} options - { saveOnEnter, saveOnBlur, datalistId }
+   */
+  bind(input, key, options = {}) {
+    const { saveOnEnter = true, saveOnBlur = true } = options;
+    const datalistId = options.datalistId || `${input.id}-history`;
+    let datalist = document.getElementById(datalistId);
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = datalistId;
+      document.body.appendChild(datalist);
+    }
+    input.setAttribute('list', datalistId);
+
+    const refresh = () => {
+      const items = this.load(key);
+      datalist.innerHTML = items
+        .map(v => `<option value="${escapeHtml(v)}">`)
+        .join('');
+    };
+
+    // すでにバインド済みなら refresh だけ呼んで終わる
+    if (this._bound.has(input)) {
+      refresh();
+      return this._bound.get(input);
+    }
+
+    refresh();
+
+    if (saveOnBlur) {
+      input.addEventListener('blur', () => {
+        this.save(key, input.value);
+        refresh();
+      });
+    }
+    if (saveOnEnter) {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          this.save(key, input.value);
+          refresh();
+        }
+      });
+    }
+
+    const handle = { refresh };
+    this._bound.set(input, handle);
+    return handle;
+  },
+};
+
+/**
+ * テキストプリセット管理（セリフ・メモなど用）
+ * チップ形式で表示し、クリックで入力欄に挿入、×で削除
+ */
+const TextPresets = {
+  MAX: 30,
+  STORAGE_PREFIX: 'textPresets_',
+
+  load(key) {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_PREFIX + key);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  save(key, list) {
+    try {
+      localStorage.setItem(this.STORAGE_PREFIX + key, JSON.stringify(list));
+    } catch (e) {
+      console.error('プリセットの保存エラー:', e);
+    }
+  },
+
+  add(key, value) {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return false;
+    let list = this.load(key);
+    if (list.includes(trimmed)) return false;
+    list.unshift(trimmed);
+    if (list.length > this.MAX) list = list.slice(0, this.MAX);
+    this.save(key, list);
+    return true;
+  },
+
+  remove(key, value) {
+    const list = this.load(key).filter(v => v !== value);
+    this.save(key, list);
+  },
+
+  /**
+   * チップコンテナにプリセット一覧を描画
+   * @param {string} key - プリセットのキー
+   * @param {HTMLElement} container - .preset-chips 要素
+   * @param {(value: string) => void} onApply - チップクリック時のコールバック
+   */
+  render(key, container, onApply) {
+    const list = this.load(key);
+    container.innerHTML = '';
+    list.forEach(value => {
+      const chip = document.createElement('span');
+      chip.className = 'preset-chip';
+      chip.title = value;
+
+      const label = document.createElement('span');
+      label.className = 'preset-chip__label';
+      label.textContent = value;
+      chip.appendChild(label);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'preset-chip__remove';
+      remove.textContent = '×';
+      remove.title = 'プリセットを削除';
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.remove(key, value);
+        this.render(key, container, onApply);
+      });
+      chip.appendChild(remove);
+
+      chip.addEventListener('click', () => onApply(value));
+      container.appendChild(chip);
+    });
+  },
+};
+
+/**
+ * 出力ファイル名テンプレート機能
+ * トークン置換でファイル名（およびサブディレクトリ）を生成する。
+ * テンプレート内の "/" はサブフォルダとして扱われる。
+ */
+const FileNameTemplate = {
+  STORAGE_KEY: 'fileNameTemplate',
+  DEFAULT: '{videoId}_{startAt}-{endAt}',
+
+  /**
+   * トークン定義一覧（モーダル表示・ヘルプ・解決処理で共用）
+   */
+  TOKENS: [
+    { key: 'videoId',      desc: 'YouTube Video ID',      example: 'dQw4w9WgXcQ' },
+    { key: 'videoTitle',   desc: '動画タイトル',           example: 'Never_Gonna_Give_You_Up' },
+    { key: 'channelTitle', desc: 'チャンネル名',           example: 'RickAstleyVEVO' },
+    { key: 'publishDate',  desc: '公開日 (YYYY-MM-DD)',   example: '2009-10-25' },
+    { key: 'downloadDate', desc: 'ダウンロード日',         example: '2026-04-28' },
+    { key: 'startAt',      desc: '開始時間（6桁0詰め秒）', example: '000010' },
+    { key: 'endAt',        desc: '終了時間（6桁0詰め秒）', example: '000040' },
+    { key: 'startAtClock', desc: '開始時間 (HH-MM-SS)',   example: '00-00-10' },
+    { key: 'endAtClock',   desc: '終了時間 (HH-MM-SS)',   example: '00-00-40' },
+    { key: 'duration',     desc: '長さ（秒、4桁0詰め）',  example: '0030' },
+    { key: 'serif',        desc: 'セリフ／クリップタイトル', example: 'こんにちは' },
+    { key: 'categories',   desc: 'カテゴリ（_区切り）',    example: '面白い_感動' },
+  ],
+
+  get() {
+    try {
+      const saved = localStorage.getItem(this.STORAGE_KEY);
+      return saved && saved.trim() ? saved : this.DEFAULT;
+    } catch (e) {
+      return this.DEFAULT;
+    }
+  },
+
+  set(template) {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, template);
+    } catch (e) {
+      console.error('テンプレートの保存に失敗:', e);
+    }
+  },
+
+  reset() {
+    try { localStorage.removeItem(this.STORAGE_KEY); } catch (e) {}
+  },
+
+  /**
+   * トークンの値として安全な文字列に変換する。
+   * パス区切り文字（/, \）はトークン値内では _ に置換し、テンプレートの "/" だけが
+   * サブディレクトリ扱いとなるようにする。
+   */
+  sanitizeTokenValue(value) {
+    if (value === undefined || value === null) return '';
+    let s = String(value);
+    // パス区切り・予約文字・制御文字を _ に置換
+    s = s.replace(/[<>:"|?*\x00-\x1f/\\]/g, '_');
+    // 連続する _ を圧縮
+    s = s.replace(/_+/g, '_');
+    return s.trim();
+  },
+
+  /**
+   * テンプレート全体をパス（フォルダ含む）として正規化する。
+   * - "/" はサブフォルダ区切り
+   * - 各セグメントの先頭末尾の空白／ドットを削除
+   * - 空セグメントを除去
+   */
+  normalizePath(rawPath) {
+    const parts = rawPath
+      .split('/')
+      .map(s => s.replace(/[<>:"|?*\x00-\x1f\\]/g, '_').replace(/^[\s.]+|[\s.]+$/g, '').trim())
+      .filter(s => s.length > 0);
+    return parts.join('/');
+  },
+
+  /**
+   * テンプレートをコンテキストで解決して、ファイル名（パス）を生成する。
+   * @param {string} template
+   * @param {object} ctx
+   * @returns {string}
+   */
+  resolve(template, ctx) {
+    if (!template || typeof template !== 'string') template = this.DEFAULT;
+
+    let result = template;
+    for (const { key } of this.TOKENS) {
+      const placeholder = `{${key}}`;
+      if (!result.includes(placeholder)) continue;
+      const value = this.sanitizeTokenValue(ctx[key]);
+      result = result.split(placeholder).join(value);
+    }
+
+    return this.normalizePath(result);
+  },
+};
+
+/**
+ * テンプレート解決用コンテキストを現在の状態から構築
+ */
+function buildTemplateContext() {
+  const videoId = (videoIdInput && videoIdInput.value || '').trim() || (metadata.videoId || '');
+  const m = (currentVideoFile && currentVideoFile.metadata) || {};
+
+  // 公開日: yt-dlp形式 (YYYYMMDD) を YYYY-MM-DD に整形
+  let publishDate = '';
+  if (m.uploadDate && /^\d{8}$/.test(m.uploadDate)) {
+    publishDate = `${m.uploadDate.slice(0,4)}-${m.uploadDate.slice(4,6)}-${m.uploadDate.slice(6,8)}`;
+  } else if (m.uploadDate) {
+    publishDate = String(m.uploadDate);
+  }
+
+  // ダウンロード日: ISO -> YYYY-MM-DD
+  let downloadDate = '';
+  if (m.downloadedAt) {
+    const d = new Date(m.downloadedAt);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      downloadDate = `${y}-${mo}-${dd}`;
+    }
+  }
+
+  const startSec = Math.max(0, Math.floor(trimState.startTime || 0));
+  const endSec = Math.max(0, Math.floor(trimState.endTime || 0));
+  const dur = Math.max(0, endSec - startSec);
+
+  const formatClock = (sec) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2,'0')}-${String(m).padStart(2,'0')}-${String(s).padStart(2,'0')}`;
+  };
+
+  return {
+    videoId,
+    videoTitle: m.title || '',
+    channelTitle: m.uploader || '',
+    publishDate,
+    downloadDate,
+    startAt: String(startSec).padStart(6, '0'),
+    endAt: String(endSec).padStart(6, '0'),
+    startAtClock: formatClock(startSec),
+    endAtClock: formatClock(endSec),
+    duration: String(dur).padStart(4, '0'),
+    serif: (metadata.serif || '').trim(),
+    categories: (metadata.categories || []).join('_'),
+  };
+}
+
+/**
+ * タイムラインクリックモード（"seek" | "range15" | "range30"）
+ * タイムラインバー/オーバービューをクリックした際の動作を切り替える
+ */
+let timelineClickMode = 'seek';
+function loadTimelineClickMode() {
+  try {
+    const saved = localStorage.getItem('timelineClickMode');
+    if (saved && ['seek', 'range15', 'range30'].includes(saved)) {
+      timelineClickMode = saved;
+    }
+  } catch (e) {}
+}
+function saveTimelineClickMode() {
+  try { localStorage.setItem('timelineClickMode', timelineClickMode); } catch (e) {}
+}
+
+/**
  * 初期化処理
  */
 function initialize() {
   // カテゴリをlocalStorageから読み込み
   loadCategories();
-  
+
   // カテゴリボタンを生成
   renderCategoryButtons();
-  
+
   // 微調整フレーム設定を読み込み
   loadFineTuneSettings();
-  
+
   // 微調整ボタンのラベルを更新
   updateFineTuneButtonLabels();
+
+  // 入力履歴の紐付け
+  initInputHistories();
+
+  // テキストプリセットの初期化
+  initTextPresets();
+
+  // タイムラインクリックモードを復元
+  loadTimelineClickMode();
+  setTimelineClickMode(timelineClickMode);
+
+  // クリックモードボタンのイベント設定
+  document.querySelectorAll('.btn-mode[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setTimelineClickMode(btn.dataset.mode);
+    });
+  });
+
+  // 現在位置から ±15/±30秒 範囲を作成するボタン
+  const rangeFromCurrent = (range) => {
+    if (!videoPlayer.duration) {
+      showToast('動画を読み込んでください', 'warning');
+      return;
+    }
+    applyCenteredRange(videoPlayer.currentTime, range, '現在位置を中心に範囲設定');
+  };
+  document.getElementById('rangeFromCurrent15Btn').addEventListener('click', () => rangeFromCurrent(15));
+  document.getElementById('rangeFromCurrent30Btn').addEventListener('click', () => rangeFromCurrent(30));
+}
+
+/**
+ * 入力履歴を各input要素に紐付け
+ */
+function initInputHistories() {
+  InputHistory.bind(searchQuery, 'searchQuery');
+  InputHistory.bind(downloadUrl, 'downloadUrl');
+  InputHistory.bind(videoIdInput, 'videoId', { saveOnEnter: false });
+  InputHistory.bind(serifInput, 'serif', { saveOnEnter: false });
+}
+
+/**
+ * テキストプリセット（セリフ・メモ）の初期化
+ * 重複イベント防止のため、初回呼び出し時にのみイベントを登録する
+ */
+let _textPresetsInitialized = false;
+let _renderSerifChips = null;
+let _renderMemoChips = null;
+
+function initTextPresets() {
+  const serifChips = document.getElementById('serifPresetChips');
+  const memoChips = document.getElementById('memoPresetChips');
+  const serifSaveBtn = document.getElementById('serifSavePresetBtn');
+  const memoSaveBtn = document.getElementById('memoSavePresetBtn');
+
+  _renderSerifChips = () => {
+    TextPresets.render('serif', serifChips, (value) => {
+      serifInput.value = value;
+      metadata.serif = value;
+      // セリフはタイトルと双方向同期しているので、クリップタイトルも更新
+      const clipTitleInput = document.getElementById('clipTitle');
+      if (clipTitleInput) clipTitleInput.value = value;
+      serifInput.dispatchEvent(new Event('input', { bubbles: true }));
+      showToast('セリフプリセットを適用しました', 'success', 1500);
+    });
+  };
+  _renderMemoChips = () => {
+    TextPresets.render('memo', memoChips, (value) => {
+      memoInput.value = value;
+      metadata.memo = value;
+      memoInput.dispatchEvent(new Event('input', { bubbles: true }));
+      showToast('メモプリセットを適用しました', 'success', 1500);
+    });
+  };
+
+  _renderSerifChips();
+  _renderMemoChips();
+
+  if (_textPresetsInitialized) return;
+  _textPresetsInitialized = true;
+
+  serifSaveBtn.addEventListener('click', () => {
+    const value = serifInput.value.trim();
+    if (!value) {
+      showToast('セリフを入力してください', 'warning');
+      return;
+    }
+    if (TextPresets.add('serif', value)) {
+      _renderSerifChips();
+      showToast('セリフをプリセットに保存しました', 'success');
+    } else {
+      showToast('既に登録済みのプリセットです', 'info');
+    }
+  });
+
+  memoSaveBtn.addEventListener('click', () => {
+    const value = memoInput.value.trim();
+    if (!value) {
+      showToast('メモを入力してください', 'warning');
+      return;
+    }
+    if (TextPresets.add('memo', value)) {
+      _renderMemoChips();
+      showToast('メモをプリセットに保存しました', 'success');
+    } else {
+      showToast('既に登録済みのプリセットです', 'info');
+    }
+  });
 }
 
 /**
@@ -384,9 +827,11 @@ async function searchVideos() {
 
   try {
     const result = await window.electronAPI.searchVideos(query, 10);
-    
+
     if (result.success) {
       displaySearchResults(result.data);
+      // 検索成功時に履歴へ保存
+      InputHistory.save('searchQuery', query);
     } else {
       searchResults.innerHTML = `<p class="error">検索に失敗しました: ${result.error}</p>`;
     }
@@ -474,7 +919,10 @@ async function downloadVideo() {
       showStatus(`ダウンロードが完了しました: ${result.data.filePath}`, 'success');
       progressBar.style.width = '100%';
       progressText.textContent = '100%';
-      
+
+      // ダウンロード成功時に履歴へ保存
+      InputHistory.save('downloadUrl', url);
+
       // ダウンロード済み動画リストを更新
       setTimeout(() => {
         loadDownloadedVideos();
@@ -618,7 +1066,8 @@ async function playVideo(fileIndex) {
     name: file.name,
     path: filePath,
     size: file.stats.size,
-    hasLiveChat: file.hasLiveChat || false
+    hasLiveChat: file.hasLiveChat || false,
+    metadata: file.metadata || null
   };
   
   // Video IDを抽出（ファイル名から）
@@ -1015,6 +1464,63 @@ function initTrimSliders() {
 }
 
 /**
+ * タイムラインクリック時の共通処理
+ * 修飾キー > クリックモードの優先順で動作を決定
+ * @param {number} time - クリックされた位置の時間（秒）
+ * @param {MouseEvent} event - クリックイベント
+ */
+function handleTimelineClick(time, event) {
+  if (!videoPlayer.duration) return;
+
+  // 修飾キーが優先（Shift=±15秒, Alt/Option=±30秒）
+  if (event.shiftKey) {
+    applyCenteredRange(time, 15, 'クリック位置を中心に範囲設定');
+    return;
+  }
+  if (event.altKey) {
+    applyCenteredRange(time, 30, 'クリック位置を中心に範囲設定');
+    return;
+  }
+
+  // クリックモードに従って動作
+  if (timelineClickMode === 'range15') {
+    applyCenteredRange(time, 15, 'クリック位置を中心に範囲設定');
+    return;
+  }
+  if (timelineClickMode === 'range30') {
+    applyCenteredRange(time, 30, 'クリック位置を中心に範囲設定');
+    return;
+  }
+
+  // デフォルト: 再生位置を移動
+  videoPlayer.currentTime = time;
+  if (videoPlayer.paused) {
+    videoPlayer.play().catch(err => console.error('再生エラー:', err));
+  }
+}
+
+/**
+ * タイムラインクリックモードを設定し、UIに反映する
+ * @param {'seek' | 'range15' | 'range30'} mode
+ */
+function setTimelineClickMode(mode) {
+  if (!['seek', 'range15', 'range30'].includes(mode)) return;
+  timelineClickMode = mode;
+  saveTimelineClickMode();
+
+  // ボタンのアクティブ状態を更新
+  document.querySelectorAll('.btn-mode[data-mode]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+
+  // タイムライン部のカーソルを変更（CSS class）
+  const wrapper = document.querySelector('.clip-timeline-wrapper');
+  if (wrapper) {
+    wrapper.classList.toggle('timeline-mode-range', mode !== 'seek');
+  }
+}
+
+/**
  * クリップタイムラインバーの初期化（ドラッグ処理）
  */
 let clipTimelineInitialized = false;
@@ -1087,15 +1593,15 @@ function initClipTimeline() {
     clipOverviewViewport.setPointerCapture(e.pointerId);
   });
 
-  // オーバービューのトラッククリックで再生位置を移動
+  // オーバービューのトラッククリック
+  // - 通常クリック: クリックモードに従って動作（移動 or ±15/30秒範囲設定）
+  // - Shift+クリック: ±15秒で範囲設定（モード問わず）
+  // - Alt+クリック: ±30秒で範囲設定（モード問わず）
   clipOverviewTrack.addEventListener('click', (e) => {
     if (e.target === clipOverviewViewport) return;
     if (!videoPlayer.duration) return;
-    const newTime = getOverviewTimeFromX(e.clientX);
-    videoPlayer.currentTime = newTime;
-    if (videoPlayer.paused) {
-      videoPlayer.play().catch(err => console.error('再生エラー:', err));
-    }
+    const time = getOverviewTimeFromX(e.clientX);
+    handleTimelineClick(time, e);
   });
 
   // ドラッグ中の処理
@@ -1182,16 +1688,15 @@ function initClipTimeline() {
     }
   });
 
-  // トラッククリックで再生位置を変更
+  // メインタイムラインクリック
+  // - 通常クリック: クリックモードに従って動作（移動 or ±15/30秒範囲設定）
+  // - Shift+クリック: ±15秒で範囲設定（モード問わず）
+  // - Alt+クリック: ±30秒で範囲設定（モード問わず）
   clipTrack.addEventListener('click', (e) => {
-    if (e.target === clipHandleStart || e.target === clipHandleEnd || 
+    if (e.target === clipHandleStart || e.target === clipHandleEnd ||
         e.target === clipSelection || e.target.closest('.clip-timeline__handle')) return;
-    
-    const newTime = getTimeFromX(e.clientX);
-    videoPlayer.currentTime = newTime;
-    if (videoPlayer.paused) {
-      videoPlayer.play().catch(err => console.error('再生エラー:', err));
-    }
+    const time = getTimeFromX(e.clientX);
+    handleTimelineClick(time, e);
   });
 
   // サムネイルプレビュー（メインタイムライン・オーバービュー両方）
@@ -1765,21 +2270,18 @@ function updateSelectedCategories() {
   });
 }
 
-// ファイル名の自動生成関数
+// ファイル名の自動生成関数（テンプレートに従って生成）
 function autoGenerateFileName() {
-  const videoId = videoIdInput.value.trim();
-  
-  if (!videoId || !videoPlayer.duration) {
-    return;
-  }
-  
-  // フォーマット: videoId_startTime-endTime（秒は6桁0詰め）
-  const startSec = Math.floor(trimState.startTime);
-  const endSec = Math.floor(trimState.endTime);
-  const startSecPadded = String(startSec).padStart(6, '0');
-  const endSecPadded = String(endSec).padStart(6, '0');
-  const fileName = `${videoId}_${startSecPadded}-${endSecPadded}`;
-  
+  if (!videoPlayer.duration) return;
+
+  const fileName = FileNameTemplate.resolve(
+    FileNameTemplate.get(),
+    buildTemplateContext()
+  );
+
+  // 解決後が空（必須トークンが空など）の場合は更新しない
+  if (!fileName) return;
+
   fileNameInput.value = fileName;
   metadata.fileName = fileName;
 }
@@ -1871,9 +2373,12 @@ saveMetadataBtn.addEventListener('click', async () => {
   try {
     // IPCを使ってoutput/jsonディレクトリに保存
     const result = await window.electronAPI.saveMetadata(saveData, metadata.fileName || 'metadata');
-    
+
     if (result.success) {
       showToast(`メタデータを保存しました\n保存先: ${result.filePath}`, 'success', 5000);
+      // 保存成功時に履歴へ追加
+      if (metadata.videoId) InputHistory.save('videoId', metadata.videoId);
+      if (metadata.serif) InputHistory.save('serif', metadata.serif);
     } else {
       showToast(`保存に失敗しました: ${result.error}`, 'error');
     }
@@ -2592,33 +3097,170 @@ function resetCategories() {
   }
 }
 
-// 全設定をリセット
-function resetAllSettings() {
-  if (!confirm('全ての設定をデフォルトに戻しますか？\n\n以下の設定がリセットされます：\n・カテゴリ設定\n・キーボードショートカット\n・微調整フレーム設定\n\nこの操作は取り消せません。')) {
+/**
+ * 出力ファイル名テンプレート設定モーダル
+ */
+function openFileNameTemplateModal() {
+  const modal = document.getElementById('fileNameTemplateModal');
+  modal.classList.add('active');
+
+  const input = document.getElementById('fileNameTemplateInput');
+  input.value = FileNameTemplate.get();
+
+  renderTokenCards();
+  updateFileNameTemplatePreview();
+
+  // 入力時にプレビューを更新
+  input.oninput = updateFileNameTemplatePreview;
+
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeFileNameTemplateModal() {
+  const modal = document.getElementById('fileNameTemplateModal');
+  modal.classList.remove('active');
+}
+
+function renderTokenCards() {
+  const container = document.getElementById('fileNameTemplateTokens');
+  container.innerHTML = '';
+
+  FileNameTemplate.TOKENS.forEach(token => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'token-card';
+    card.title = `クリックでテンプレートに「{${token.key}}」を挿入`;
+    card.innerHTML = `
+      <span class="token-card__name">{${escapeHtml(token.key)}}</span>
+      <span class="token-card__desc">${escapeHtml(token.desc)}</span>
+      <span class="token-card__example">例: ${escapeHtml(token.example)}</span>
+    `;
+    card.addEventListener('click', () => {
+      insertTokenAtCursor(`{${token.key}}`);
+    });
+    container.appendChild(card);
+  });
+}
+
+function insertTokenAtCursor(text) {
+  const input = document.getElementById('fileNameTemplateInput');
+  const start = input.selectionStart || 0;
+  const end = input.selectionEnd || 0;
+  const value = input.value;
+  input.value = value.slice(0, start) + text + value.slice(end);
+  const newPos = start + text.length;
+  input.focus();
+  input.setSelectionRange(newPos, newPos);
+  updateFileNameTemplatePreview();
+}
+
+function updateFileNameTemplatePreview() {
+  const input = document.getElementById('fileNameTemplateInput');
+  const previewEl = document.querySelector('.filename-template-preview');
+  const previewValueEl = document.getElementById('fileNameTemplatePreview');
+
+  const template = input.value;
+
+  // サンプルコンテキスト（実データがあれば優先、なければトークン定義の example を使用）
+  let ctx;
+  if (videoPlayer.duration && currentVideoFile) {
+    ctx = buildTemplateContext();
+  } else {
+    ctx = {};
+    FileNameTemplate.TOKENS.forEach(t => { ctx[t.key] = t.example; });
+  }
+
+  const resolved = FileNameTemplate.resolve(template, ctx);
+
+  if (!resolved) {
+    previewValueEl.textContent = '（空 — 有効なテンプレートを入力してください）';
+    previewEl.classList.add('invalid');
+  } else {
+    previewValueEl.textContent = `${resolved}.mp4`;
+    previewEl.classList.remove('invalid');
+  }
+}
+
+function saveFileNameTemplate() {
+  const input = document.getElementById('fileNameTemplateInput');
+  const template = input.value.trim();
+
+  if (!template) {
+    showToast('テンプレートを入力してください', 'warning');
     return;
   }
-  
+
+  // 解決後に空にならないかチェック
+  const sampleCtx = {};
+  FileNameTemplate.TOKENS.forEach(t => { sampleCtx[t.key] = t.example; });
+  const resolved = FileNameTemplate.resolve(template, sampleCtx);
+  if (!resolved) {
+    showToast('解決後のファイル名が空になります。テンプレートを確認してください', 'error');
+    return;
+  }
+
+  FileNameTemplate.set(template);
+  // 現在編集中の動画があれば即座にファイル名を更新
+  if (videoPlayer.duration) autoGenerateFileName();
+  closeFileNameTemplateModal();
+  showToast('ファイル名テンプレートを保存しました', 'success');
+}
+
+function resetFileNameTemplate() {
+  if (!confirm('ファイル名テンプレートを既定値に戻しますか？')) return;
+  FileNameTemplate.reset();
+  document.getElementById('fileNameTemplateInput').value = FileNameTemplate.DEFAULT;
+  updateFileNameTemplatePreview();
+  if (videoPlayer.duration) autoGenerateFileName();
+  showToast('ファイル名テンプレートを既定値に戻しました', 'success');
+}
+
+// 全設定をリセット
+function resetAllSettings() {
+  if (!confirm('全ての設定をデフォルトに戻しますか？\n\n以下の設定がリセットされます：\n・カテゴリ設定\n・キーボードショートカット\n・微調整フレーム設定\n・入力履歴（検索/URL/Video ID/セリフ）\n・テキストプリセット（セリフ/メモ）\n・タイムラインクリックモード\n・ファイル名テンプレート\n\nこの操作は取り消せません。')) {
+    return;
+  }
+
   try {
     // localStorageから全設定を削除
     localStorage.removeItem('availableCategories');
     localStorage.removeItem('keyboardShortcuts');
     localStorage.removeItem('fineTuneSettings');
-    
+    localStorage.removeItem('timelineClickMode');
+    localStorage.removeItem(FileNameTemplate.STORAGE_KEY);
+
+    // 入力履歴をクリア
+    ['searchQuery', 'downloadUrl', 'videoId', 'serif'].forEach(key => {
+      localStorage.removeItem(InputHistory.STORAGE_PREFIX + key);
+    });
+
+    // テキストプリセットをクリア
+    ['serif', 'memo'].forEach(key => {
+      localStorage.removeItem(TextPresets.STORAGE_PREFIX + key);
+    });
+
     // カテゴリをデフォルトに戻す
     availableCategories = [...defaultCategories];
     metadata.categories = metadata.categories.filter(c => availableCategories.includes(c));
     renderCategoryList();
     renderCategoryButtons();
     updateSelectedCategories();
-    
+
     // ショートカットをデフォルトに戻す
     shortcuts = { ...defaultShortcuts };
     renderShortcutList();
-    
+
     // 微調整フレーム設定をデフォルトに戻す
     fineTuneSettings = { smallFrames: 1, largeFrames: 15 };
     updateFineTuneButtonLabels();
-    
+
+    // クリックモードをseekに戻す
+    setTimelineClickMode('seek');
+
+    // datalist履歴とプリセットチップを再描画
+    initInputHistories();
+    initTextPresets();
+
     showToast('全ての設定をデフォルトに戻しました', 'success');
   } catch (error) {
     console.error('設定のリセットに失敗:', error);
@@ -2702,6 +3344,29 @@ document.getElementById('saveShortcutsBtn').addEventListener('click', () => {
 document.getElementById('shortcutModal').addEventListener('click', (e) => {
   if (e.target.id === 'shortcutModal') {
     closeShortcutModal();
+  }
+});
+
+// 出力ファイル名テンプレート設定モーダル関連
+document.getElementById('fileNameTemplateBtn').addEventListener('click', openFileNameTemplateModal);
+document.getElementById('closeFileNameTemplateModal').addEventListener('click', closeFileNameTemplateModal);
+document.getElementById('saveFileNameTemplateBtn').addEventListener('click', saveFileNameTemplate);
+document.getElementById('resetFileNameTemplateBtn').addEventListener('click', resetFileNameTemplate);
+
+// プリセットボタン: クリックでテンプレートを適用
+document.querySelectorAll('.filename-template-preset-buttons [data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById('fileNameTemplateInput');
+    input.value = btn.dataset.preset;
+    updateFileNameTemplatePreview();
+    input.focus();
+  });
+});
+
+// モーダル外クリックで閉じる
+document.getElementById('fileNameTemplateModal').addEventListener('click', (e) => {
+  if (e.target.id === 'fileNameTemplateModal') {
+    closeFileNameTemplateModal();
   }
 });
 
@@ -3069,11 +3734,22 @@ function detectAndShowHotspots() {
 function jumpToHotspot(startTime, endTime) {
   if (!videoPlayer.duration) return;
 
-  // 区間の中心を基準に ±15 秒のループ範囲を作成（動画端でクランプ）
   const center = (startTime + endTime) / 2;
-  const range = 15;
-  const newStart = Math.max(0, center - range);
-  const newEnd = Math.min(videoPlayer.duration, center + range);
+  applyCenteredRange(center, 15, '盛り上がり箇所をループ範囲に設定');
+}
+
+/**
+ * 指定した時間を中心に ±range 秒のトリミング範囲を作成し、ループ再生する
+ * @param {number} centerTime - 中心の時間（秒）
+ * @param {number} range - 中心からの片側の長さ（秒）
+ * @param {string} [toastLabel] - トースト表示時のラベル
+ */
+function applyCenteredRange(centerTime, range, toastLabel = '範囲を設定') {
+  if (!videoPlayer.duration) return;
+
+  const duration = videoPlayer.duration;
+  const newStart = Math.max(0, centerTime - range);
+  const newEnd = Math.min(duration, centerTime + range);
 
   trimState.startTime = newStart;
   trimState.endTime = newEnd;
@@ -3082,12 +3758,11 @@ function jumpToHotspot(startTime, endTime) {
 
   updateTrimDisplay();
 
-  // 範囲の先頭から再生
   videoPlayer.currentTime = newStart;
   videoPlayer.play().catch(e => console.error('再生エラー:', e));
 
   showToast(
-    `盛り上がり箇所をループ範囲に設定: ${formatTimeShort(newStart)} - ${formatTimeShort(newEnd)}`,
+    `${toastLabel}: ${formatTimeShort(newStart)} 〜 ${formatTimeShort(newEnd)} (±${range}秒)`,
     'info',
     2500
   );

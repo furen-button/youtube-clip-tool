@@ -1275,13 +1275,63 @@ section h2 {
   min-width: 150px;
 }
 
-/* トリミングツールバー（ループチェックボックスのみ） */
+/* トリミングツールバー（ループ + クリックモード + クイック範囲設定） */
 .trimming-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 6px 4px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+/* タイムラインクリックモードセレクター */
+.click-mode-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: #edf2f7;
+  border-radius: 6px;
+  border: 1px solid #cbd5e0;
+}
+
+.click-mode-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin: 0 6px;
+  white-space: nowrap;
+}
+
+.btn-mode {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: transparent;
+  color: #4a5568;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-mode:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #5a67d8;
+}
+
+.btn-mode.active {
+  background: #667eea;
+  color: white;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+/* クリック範囲設定モード時のタイムラインのカーソル */
+.timeline-mode-range .clip-overview__track,
+.timeline-mode-range .clip-timeline__track {
+  cursor: crosshair;
 }
 
 /* トリミングアクション（コンパクト版） */
@@ -1381,7 +1431,139 @@ section h2 {
 .metadata-section h3 {
   font-size: 1.1rem;
   color: #667eea;
-  margin-bottom: 15px;
+  margin: 0;
+}
+
+/* 折りたたみセクション（<details>/<summary>） */
+.collapsible-section {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-section > .metadata-form {
+  padding: 0 15px 15px 15px;
+}
+
+.collapsible-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 15px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  border-bottom: 1px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-summary:hover {
+  background: #f7fafc;
+}
+
+.collapsible-section[open] > .collapsible-summary {
+  border-bottom-color: #e2e8f0;
+}
+
+.collapsible-summary__icon {
+  font-size: 0.9rem;
+  color: #667eea;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.collapsible-section:not([open]) > .collapsible-summary .collapsible-summary__icon {
+  transform: rotate(-90deg);
+}
+
+.collapsible-summary h3 {
+  flex: 1;
+}
+
+.collapsible-summary__hint {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  font-weight: 500;
+}
+
+/* プリセット用チップ表示 */
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  min-height: 0;
+}
+
+.preset-chips:empty::before {
+  content: attr(data-empty);
+  font-size: 0.8rem;
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 10px;
+  background: #edf2f7;
+  border: 1px solid #cbd5e0;
+  border-radius: 14px;
+  font-size: 0.8rem;
+  color: #2d3748;
+  cursor: pointer;
+  transition: all 0.15s;
+  max-width: 100%;
+}
+
+.preset-chip:hover {
+  background: #667eea;
+  color: white;
+  border-color: #5a67d8;
+}
+
+.preset-chip__label {
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  color: #718096;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.preset-chip:hover .preset-chip__remove {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.preset-chip__remove:hover {
+  background: #f56565 !important;
+  color: white !important;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .metadata-form {
@@ -1428,10 +1610,17 @@ section h2 {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .input-with-button .form-input {
   flex: 1;
+  min-width: 200px;
+}
+
+/* datalistはレイアウトに影響しないようにする */
+.input-with-button > datalist {
+  display: none;
 }
 
 .btn-sm {
@@ -1810,6 +1999,145 @@ header {
 .shortcut-modal-content {
   width: 90%;
   max-width: 900px;
+}
+
+.filename-template-modal-content {
+  width: 90%;
+  max-width: 760px;
+}
+
+/* ファイル名テンプレート設定 */
+.filename-template-info {
+  background: #edf2f7;
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+
+.filename-template-info p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.filename-template-info code {
+  background: #cbd5e0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.filename-template-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.filename-template-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: -10px;
+}
+
+.filename-template-input {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.95rem;
+  padding: 12px 14px;
+}
+
+.filename-template-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.filename-template-preview__label {
+  font-weight: 600;
+  color: #4a5568;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.filename-template-preview__value {
+  color: #2d3748;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.9rem;
+  word-break: break-all;
+  flex: 1;
+}
+
+.filename-template-preview.invalid {
+  background: #fff5f5;
+  border-color: #fc8181;
+}
+
+.filename-template-preview.invalid .filename-template-preview__value {
+  color: #c53030;
+}
+
+.filename-template-tokens h3,
+.filename-template-presets h3 {
+  font-size: 0.95rem;
+  color: #2d3748;
+  margin-bottom: 10px;
+}
+
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.token-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: #f7fafc;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.token-card:hover {
+  background: #edf2f7;
+  border-color: #667eea;
+  transform: translateY(-1px);
+}
+
+.token-card__name {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #5a67d8;
+}
+
+.token-card__desc {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.token-card__example {
+  font-size: 0.7rem;
+  color: #a0aec0;
+  font-family: 'SF Mono', Menlo, monospace;
+  margin-top: 2px;
+}
+
+.filename-template-preset-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @keyframes slideUp {

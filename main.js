@@ -166,22 +166,49 @@ ipcMain.handle('load-video-file', async (event, filePath) => {
   }
 });
 
+/**
+ * 出力名/サブディレクトリの安全化
+ * テンプレートの "/" はサブフォルダ区切りとして扱い、各セグメント内の禁止文字のみを置換する。
+ * @param {string} rawName - テンプレート解決後のパス (例: "Channel/2023-01-01-Title-000010-000020")
+ * @param {string} fallback - 解決後が空だったときの fallback 名
+ * @returns {{ subDirs: string[], baseName: string }}
+ */
+function resolveOutputSubpath(rawName, fallback = 'output') {
+  const cleaned = String(rawName || '')
+    .split(/[\\/]+/)
+    .map(seg => seg
+      // OS共通で禁止される文字 + 制御文字を _ に
+      .replace(/[<>:"|?*\x00-\x1f]/g, '_')
+      // セグメント先頭末尾のドット・空白を除去
+      .replace(/^[\s.]+|[\s.]+$/g, '')
+      .trim()
+    )
+    .filter(seg => seg.length > 0);
+
+  if (cleaned.length === 0) {
+    return { subDirs: [], baseName: fallback };
+  }
+
+  const baseName = cleaned.pop();
+  return { subDirs: cleaned, baseName };
+}
+
 // メタデータをJSONファイルとして保存
 ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
   try {
-    // output/json ディレクトリを作成
-    const outputDir = path.join(__dirname, 'output', 'json');
+    const outputBaseDir = path.join(__dirname, 'output', 'json');
+
+    // テンプレート由来の "/" を含むファイル名を、サブディレクトリ + ベース名 に分解
+    const { subDirs, baseName } = resolveOutputSubpath(fileName, 'metadata');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
-    // ファイル名を生成
-    const safeFileName = (fileName || 'metadata').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filePath = path.join(outputDir, `${safeFileName}.json`);
-    
-    // JSONファイルを保存
+
+    const filePath = path.join(outputDir, `${baseName}.json`);
+
     fs.writeFileSync(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
-    
+
     return { success: true, filePath };
   } catch (error) {
     return { success: false, error: error.message };
@@ -191,15 +218,16 @@ ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
 // FFmpegで動画をトリミングして書き出し
 ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTime, endTime) => {
   try {
-    // output/movies ディレクトリを作成
-    const outputDir = path.join(__dirname, 'output', 'movies');
+    const outputBaseDir = path.join(__dirname, 'output', 'movies');
+
+    // テンプレート由来の "/" を含むファイル名を、サブディレクトリ + ベース名 に分解
+    const { subDirs, baseName } = resolveOutputSubpath(outputFileName, 'output');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
-    // 出力ファイルパス
-    const safeFileName = outputFileName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const outputPath = path.join(outputDir, `${safeFileName}.mp4`);
+
+    const outputPath = path.join(outputDir, `${baseName}.mp4`);
     
     // 入力ファイルの存在確認
     if (!fs.existsSync(inputPath)) {

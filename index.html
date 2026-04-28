@@ -25,6 +25,14 @@
             <path d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
+        <button id="fileNameTemplateBtn" class="btn-icon" title="出力ファイル名テンプレート設定">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="13" x2="15" y2="13"/>
+            <line x1="9" y1="17" x2="15" y2="17"/>
+          </svg>
+        </button>
         <button id="shortcutSettingsBtn" class="btn-icon" title="キーボードショートカット設定 (K)">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -65,12 +73,15 @@
         <section class="search-section">
         <h2>YouTube動画を検索</h2>
         <div class="search-bar">
-          <input 
-            type="text" 
-            id="searchQuery" 
+          <input
+            type="text"
+            id="searchQuery"
             placeholder="キーワードまたはYouTube URLを入力"
             class="search-input"
+            autocomplete="off"
+            list="searchQuery-history"
           >
+          <datalist id="searchQuery-history"></datalist>
           <button id="searchBtn" class="btn btn-primary">検索</button>
         </div>
         
@@ -81,12 +92,15 @@
       <section class="download-section">
         <h2>動画をダウンロード</h2>
         <div class="download-controls">
-          <input 
-            type="text" 
-            id="downloadUrl" 
+          <input
+            type="text"
+            id="downloadUrl"
             placeholder="YouTube URLを入力"
             class="download-input"
+            autocomplete="off"
+            list="downloadUrl-history"
           >
+          <datalist id="downloadUrl-history"></datalist>
           <button id="downloadBtn" class="btn btn-success">ダウンロード</button>
         </div>
         
@@ -172,18 +186,27 @@
                 </div>
               </div>
               
-              <!-- ループチェックボックス（時間表示はクリップタイムライン/パネルで代替） -->
+              <!-- ループチェックボックス + クリックモード + 現在位置から範囲設定 -->
               <div class="trimming-toolbar">
                 <label class="checkbox-label">
                   <input type="checkbox" id="loopCheckbox" checked>
                   <span>ループ再生</span>
                 </label>
+                <div class="click-mode-selector" role="radiogroup" aria-label="タイムラインクリック動作">
+                  <span class="click-mode-label">タイムラインクリック:</span>
+                  <button type="button" class="btn-mode active" data-mode="seek" title="クリックした位置に再生位置を移動">移動</button>
+                  <button type="button" class="btn-mode" data-mode="range15" title="クリックした位置を中心に±15秒の範囲を作成">±15秒</button>
+                  <button type="button" class="btn-mode" data-mode="range30" title="クリックした位置を中心に±30秒の範囲を作成">±30秒</button>
+                </div>
+                <span class="controls-divider">|</span>
+                <button id="rangeFromCurrent15Btn" type="button" class="btn btn-sm btn-info" title="現在の再生位置を中心に±15秒の範囲を作成 (Shift+クリックでも可)">📍 ±15秒</button>
+                <button id="rangeFromCurrent30Btn" type="button" class="btn btn-sm btn-info" title="現在の再生位置を中心に±30秒の範囲を作成 (Alt+クリックでも可)">📍 ±30秒</button>
               </div>
               
               <!-- クリップタイムラインバー -->
               <div class="clip-timeline-wrapper">
                 <!-- 全体ビュー（動画全長のミニマップ） -->
-                <div class="clip-overview" id="clipOverview" title="クリックで再生位置を移動 / ドラッグで表示範囲を移動">
+                <div class="clip-overview" id="clipOverview" title="クリック: モードに従って動作 / Shift+クリック: ±15秒範囲 / Alt+クリック: ±30秒範囲 / 中央のビューポートをドラッグで表示範囲を移動">
                   <div class="clip-overview__track" id="clipOverviewTrack">
                     <div class="clip-overview__selection" id="clipOverviewSelection"></div>
                     <div class="clip-overview__viewport" id="clipOverviewViewport"></div>
@@ -196,7 +219,7 @@
                   </div>
                 </div>
                 <!-- メインタイムライン（波形と同じ表示範囲） -->
-                <div class="clip-timeline" id="clipTimeline">
+                <div class="clip-timeline" id="clipTimeline" title="クリック: モードに従って動作 / Shift+クリック: ±15秒範囲 / Alt+クリック: ±30秒範囲 / ハンドルをドラッグで範囲調整">
                   <div class="clip-timeline__track" id="clipTrack">
                     <div class="clip-timeline__selection" id="clipSelection"></div>
                     <div class="clip-timeline__handle clip-timeline__handle--start" id="clipHandleStart">
@@ -273,37 +296,45 @@
             </div>
 
         <!-- 動画プレビューセクション -->
-        <section class="preview-section" id="previewSection">
+        <div class="preview-section" id="previewSection">
 
-        <!-- メタデータ編集 -->
-        <div class="metadata-section" id="metadataSection">
-          <h3>メタデータ編集</h3>
-          
+        <!-- メタデータ編集（折りたたみ可能） -->
+        <details class="metadata-section collapsible-section" id="metadataSection" open>
+          <summary class="collapsible-summary">
+            <span class="collapsible-summary__icon" aria-hidden="true">▾</span>
+            <h3>詳細メタデータ編集</h3>
+            <span class="collapsible-summary__hint">クリックで開閉</span>
+          </summary>
+
           <div class="metadata-form">
             <div class="form-group">
               <label for="videoId">YouTube Video ID</label>
               <div class="input-with-button">
-                <input type="text" id="videoId" class="form-input" placeholder="例: dQw4w9WgXcQ">
+                <input type="text" id="videoId" class="form-input" placeholder="例: dQw4w9WgXcQ" autocomplete="off" list="videoId-history">
+                <datalist id="videoId-history"></datalist>
                 <button id="generateFileNameBtn" class="btn btn-info btn-sm" title="Video IDと時間からファイル名を生成">自動生成</button>
               </div>
             </div>
 
             <div class="form-group">
               <label for="fileName">ファイル名 (Title)</label>
-              <input type="text" id="fileName" class="form-input" placeholder="例: video_0-10">
+              <input type="text" id="fileName" class="form-input" placeholder="例: video_0-10" autocomplete="off">
             </div>
 
             <div class="form-group">
               <label for="serif">セリフ (Serif)</label>
               <div class="input-with-button">
-                <input type="text" id="serif" class="form-input" placeholder="セリフを入力">
+                <input type="text" id="serif" class="form-input" placeholder="セリフを入力" autocomplete="off" list="serif-history">
+                <datalist id="serif-history"></datalist>
+                <button id="serifSavePresetBtn" class="btn btn-secondary btn-sm" title="現在の内容をプリセットとして保存">💾</button>
                 <button id="generateRubyBtn" class="btn btn-info btn-sm" title="自動でひらがなに変換">ルビ生成</button>
               </div>
+              <div class="preset-chips" id="serifPresetChips" data-empty="プリセットなし（💾で保存）"></div>
             </div>
 
             <div class="form-group">
               <label for="ruby">セリフルビ (Ruby)</label>
-              <input type="text" id="ruby" class="form-input" placeholder="ひらがなで入力">
+              <input type="text" id="ruby" class="form-input" placeholder="ひらがなで入力" autocomplete="off">
             </div>
 
             <div class="form-group">
@@ -316,12 +347,16 @@
 
             <div class="form-group">
               <label for="clipUrl">クリップURL</label>
-              <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10">
+              <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10" autocomplete="off">
             </div>
 
             <div class="form-group">
               <label for="memo">メモ</label>
               <textarea id="memo" class="form-textarea" rows="4" placeholder="メモを入力"></textarea>
+              <div class="preset-actions">
+                <button id="memoSavePresetBtn" class="btn btn-secondary btn-sm" title="現在の内容をプリセットとして保存">💾 プリセット保存</button>
+              </div>
+              <div class="preset-chips" id="memoPresetChips" data-empty="プリセットなし（💾で保存）"></div>
             </div>
 
             <div class="metadata-actions">
@@ -330,8 +365,8 @@
               <button id="clearMetadataBtn" class="btn btn-secondary">クリア</button>
             </div>
           </div>
-        </div>
-        </section>
+        </details>
+        </div><!-- preview-section -->
           </div><!-- edit-right-panel -->
         </div><!-- edit-layout -->
       </div><!-- editTab -->
@@ -393,7 +428,54 @@
     </div>
   </div>
 
-  < </main>
+  </main>
+  </div>
+
+  <!-- 出力ファイル名テンプレート設定モーダル -->
+  <div id="fileNameTemplateModal" class="modal">
+    <div class="modal-content filename-template-modal-content">
+      <div class="modal-header">
+        <h2>出力ファイル名テンプレート設定</h2>
+        <button class="modal-close" id="closeFileNameTemplateModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="filename-template-info">
+          <p>JSON / MP4 出力時のファイル名（およびサブディレクトリ）をテンプレートでカスタマイズできます。<code>/</code> を含めるとサブフォルダが作成されます。</p>
+        </div>
+
+        <div class="filename-template-form">
+          <label class="filename-template-label" for="fileNameTemplateInput">テンプレート</label>
+          <input type="text" id="fileNameTemplateInput" class="form-input filename-template-input" placeholder="{videoId}_{startAt}-{endAt}" autocomplete="off">
+
+          <div class="filename-template-preview">
+            <span class="filename-template-preview__label">プレビュー:</span>
+            <code id="fileNameTemplatePreview" class="filename-template-preview__value">—</code>
+          </div>
+
+          <div class="filename-template-tokens">
+            <h3>利用可能なトークン（クリックで挿入）</h3>
+            <div class="token-grid" id="fileNameTemplateTokens">
+              <!-- トークン一覧は動的生成 -->
+            </div>
+          </div>
+
+          <div class="filename-template-presets">
+            <h3>プリセット</h3>
+            <div class="filename-template-preset-buttons">
+              <button type="button" class="btn btn-sm btn-secondary" data-preset="{videoId}_{startAt}-{endAt}">基本（既定）</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-preset="{channelTitle}/{publishDate}-{videoTitle}-{startAt}-{endAt}-{serif}">チャンネル別フォルダ</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-preset="{channelTitle}/{videoTitle}/{startAtClock}-{endAtClock}-{serif}">階層構造</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-preset="{publishDate}_{channelTitle}_{videoTitle}_{startAt}-{endAt}">日付プレフィックス</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="resetFileNameTemplateBtn" class="btn btn-secondary">既定値に戻す</button>
+          <button id="saveFileNameTemplateBtn" class="btn btn-success">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- トースト通知コンテナ -->
