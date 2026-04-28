@@ -3062,18 +3062,35 @@ function detectAndShowHotspots() {
 
 /**
  * 盛り上がり箇所にジャンプ（クリック時の処理）
- * @param {number} startTime - 開始時間（秒）
- * @param {number} endTime - 終了時間（秒）
+ * 盛り上がり区間の中心 ±15 秒をトリミング範囲に設定し、ループ再生する
+ * @param {number} startTime - 盛り上がり区間の開始時間（秒）
+ * @param {number} endTime - 盛り上がり区間の終了時間（秒）
  */
 function jumpToHotspot(startTime, endTime) {
   if (!videoPlayer.duration) return;
-  
-  // 再生位置をジャンプ
-  videoPlayer.currentTime = Math.max(0, startTime - 2); // 2秒前から
-  if (videoPlayer.paused) {
-    videoPlayer.play().catch(e => console.error('再生エラー:', e));
-  }
-  showToast(`盛り上がり箇所にジャンプ: ${formatTimeShort(startTime)}`, 'info', 2000);
+
+  // 区間の中心を基準に ±15 秒のループ範囲を作成（動画端でクランプ）
+  const center = (startTime + endTime) / 2;
+  const range = 15;
+  const newStart = Math.max(0, center - range);
+  const newEnd = Math.min(videoPlayer.duration, center + range);
+
+  trimState.startTime = newStart;
+  trimState.endTime = newEnd;
+  trimState.isLooping = true;
+  loopCheckbox.checked = true;
+
+  updateTrimDisplay();
+
+  // 範囲の先頭から再生
+  videoPlayer.currentTime = newStart;
+  videoPlayer.play().catch(e => console.error('再生エラー:', e));
+
+  showToast(
+    `盛り上がり箇所をループ範囲に設定: ${formatTimeShort(newStart)} - ${formatTimeShort(newEnd)}`,
+    'info',
+    2500
+  );
 }
 
 /**
