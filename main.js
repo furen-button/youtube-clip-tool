@@ -215,6 +215,32 @@ ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
   }
 });
 
+// スクリーンショット（PNG）を保存
+ipcMain.handle('save-screenshot', async (event, dataUrl, fileName) => {
+  try {
+    const outputBaseDir = path.join(__dirname, 'output', 'screenshots');
+
+    const { subDirs, baseName } = resolveOutputSubpath(fileName, 'screenshot');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputPath = path.join(outputDir, `${baseName}.png`);
+
+    // data URL の base64 部分を抽出して書き込む
+    const matches = String(dataUrl || '').match(/^data:image\/png;base64,(.+)$/);
+    if (!matches) {
+      throw new Error('スクリーンショットデータが不正です');
+    }
+    fs.writeFileSync(outputPath, matches[1], 'base64');
+
+    return { success: true, filePath: outputPath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // FFmpegで動画をトリミングして書き出し
 ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTime, endTime) => {
   try {

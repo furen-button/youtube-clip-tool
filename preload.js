@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 動画を書き出し
   exportVideo: (inputPath, outputFileName, startTime, endTime) =>
     ipcRenderer.invoke('export-video', inputPath, outputFileName, startTime, endTime),
+
+  // スクリーンショット（PNG）を保存
+  saveScreenshot: (dataUrl, fileName) =>
+    ipcRenderer.invoke('save-screenshot', dataUrl, fileName),
   
   // ライブチャットデータをダウンロード
   downloadLiveChat: (videoId) =>

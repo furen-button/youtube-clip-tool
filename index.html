@@ -84,7 +84,12 @@
           <datalist id="searchQuery-history"></datalist>
           <button id="searchBtn" class="btn btn-primary">検索</button>
         </div>
-        
+
+        <div class="search-history">
+          <span class="search-history__label">最近の検索:</span>
+          <div class="search-history__chips preset-chips" id="searchHistoryChips" data-empty="履歴なし"></div>
+        </div>
+
         <div id="searchResults" class="search-results"></div>
       </section>
 
@@ -123,7 +128,45 @@
             <div id="editTabMessage" class="info-message">
               左の「ダウンロード済み動画選択」タブから動画を選択してください
             </div>
-            <video id="videoPlayer" controls class="video-player" style="display: none;"></video>
+            <video id="videoPlayer" class="video-player" style="display: none;"></video>
+            <!-- カスタム動画ツールバー（ネイティブcontrolsの代替、動画に被らない） -->
+            <div class="video-toolbar" id="videoToolbar" style="display: none;">
+              <button id="playPauseBtn" type="button" class="video-toolbar__btn video-toolbar__btn--play" title="再生/一時停止 (Space)" aria-label="再生/一時停止">
+                <svg class="icon-play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                <svg class="icon-pause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+              </button>
+              <span class="video-toolbar__time">
+                <span id="videoCurrentTime">00:00:00</span>
+                <span class="video-toolbar__time-sep">/</span>
+                <span id="videoTotalTime">00:00:00</span>
+              </span>
+              <input type="range" id="videoSeekBar" class="video-toolbar__seek" min="0" max="1000" step="1" value="0" title="シーク">
+              <div class="video-toolbar__group">
+                <label class="video-toolbar__label" for="playbackSpeedSelect" title="再生速度">速度</label>
+                <select id="playbackSpeedSelect" class="video-toolbar__select" title="再生速度">
+                  <option value="0.25">0.25x</option>
+                  <option value="0.5">0.5x</option>
+                  <option value="0.75">0.75x</option>
+                  <option value="1" selected>1x</option>
+                  <option value="1.25">1.25x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2x</option>
+                </select>
+              </div>
+              <div class="video-toolbar__group">
+                <button id="muteBtn" type="button" class="video-toolbar__btn" title="ミュート切替" aria-label="ミュート切替">
+                  <svg class="icon-volume" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
+                  <svg class="icon-mute" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v2.18l2.45 2.45c.03-.2.05-.41.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.96 8.96 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+                </button>
+                <input type="range" id="volumeBar" class="video-toolbar__volume" min="0" max="1" step="0.01" value="1" title="音量">
+              </div>
+              <button id="screenshotBtn" type="button" class="video-toolbar__btn" title="現在のフレームをPNGとして保存" aria-label="スクリーンショット">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </button>
+              <button id="fullscreenBtn" type="button" class="video-toolbar__btn" title="フルスクリーン" aria-label="フルスクリーン">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+              </button>
+            </div>
             <!-- サムネイル取得専用の非表示 video（メイン再生に影響を与えない） -->
             <video id="thumbnailVideo" style="display:none;" muted preload="auto"></video>
             <div class="video-info" id="videoInfo"></div>
@@ -145,9 +188,9 @@
                 </div>
 
                 <div class="clip-panel__range">
-                  <span id="clipPanelStart">0:00.000</span>
+                  <span id="clipPanelStart">00:00:00</span>
                   <span class="clip-panel__range-sep">〜</span>
-                  <span id="clipPanelEnd">0:00.000</span>
+                  <span id="clipPanelEnd">00:00:00</span>
                   <span class="clip-panel__duration" id="clipPanelDuration">(0.000秒)</span>
                 </div>
 
@@ -174,15 +217,25 @@
               <div class="section-header">
                 <h3>トリミング設定</h3>
                 <div class="waveform-controls">
-                  <button id="zoomToTrimBtn" class="btn btn-info btn-sm">範囲にズーム</button>
-                  <button id="resetZoomBtn" class="btn btn-info btn-sm">ズームをリセット</button>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="normalizeCheckbox">
-                    <span>正規化</span>
-                  </label>
+                  <div class="control-group" role="group" aria-label="波形ズーム">
+                    <button id="zoomToTrimBtn" type="button" class="btn-icon-sm" title="トリミング範囲にズーム">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                    <button id="resetZoomBtn" type="button" class="btn-icon-sm" title="ズームをリセット（全体表示）">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                    <label class="checkbox-label checkbox-label--sm" title="波形振幅を正規化（音量差を視覚的に均一化）">
+                      <input type="checkbox" id="normalizeCheckbox">
+                      <span>正規化</span>
+                    </label>
+                  </div>
                   <span class="controls-divider">|</span>
-                  <button id="loadCommentsBtn" class="btn btn-warning btn-sm" title="ライブチャットのコメント密度を表示">コメント密度</button>
-                  <button id="downloadCommentsBtn" class="btn btn-secondary btn-sm" title="yt-dlpでライブチャットをダウンロード">コメントDL</button>
+                  <div class="control-group" role="group" aria-label="ライブチャットコメント">
+                    <button id="loadCommentsBtn" type="button" class="btn btn-sm btn-warning" title="ライブチャットコメント密度の表示切替">💬 密度</button>
+                    <button id="downloadCommentsBtn" type="button" class="btn-icon-sm" title="ライブチャットを yt-dlp で取得／再取得">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               
@@ -194,9 +247,9 @@
                 </label>
                 <div class="click-mode-selector" role="radiogroup" aria-label="タイムラインクリック動作">
                   <span class="click-mode-label">タイムラインクリック:</span>
-                  <button type="button" class="btn-mode active" data-mode="seek" title="クリックした位置に再生位置を移動">移動</button>
+                  <button type="button" class="btn-mode" data-mode="seek" title="クリックした位置に再生位置を移動">移動</button>
                   <button type="button" class="btn-mode" data-mode="range15" title="クリックした位置を中心に±15秒の範囲を作成">±15秒</button>
-                  <button type="button" class="btn-mode" data-mode="range30" title="クリックした位置を中心に±30秒の範囲を作成">±30秒</button>
+                  <button type="button" class="btn-mode active" data-mode="range30" title="クリックした位置を中心に±30秒の範囲を作成">±30秒</button>
                 </div>
                 <span class="controls-divider">|</span>
                 <button id="rangeFromCurrent15Btn" type="button" class="btn btn-sm btn-info" title="現在の再生位置を中心に±15秒の範囲を作成 (Shift+クリックでも可)">📍 ±15秒</button>
@@ -213,9 +266,9 @@
                     <div class="clip-overview__playhead" id="clipOverviewPlayhead"></div>
                   </div>
                   <div class="clip-overview__labels">
-                    <span class="clip-overview__label" id="clipOverviewStart">0:00</span>
+                    <span class="clip-overview__label" id="clipOverviewStart">00:00:00</span>
                     <span class="clip-overview__label clip-overview__label--center" id="clipOverviewRange">全体表示中</span>
-                    <span class="clip-overview__label" id="clipOverviewEnd">0:00</span>
+                    <span class="clip-overview__label" id="clipOverviewEnd">00:00:00</span>
                   </div>
                 </div>
                 <!-- メインタイムライン（波形と同じ表示範囲） -->
@@ -223,10 +276,10 @@
                   <div class="clip-timeline__track" id="clipTrack">
                     <div class="clip-timeline__selection" id="clipSelection"></div>
                     <div class="clip-timeline__handle clip-timeline__handle--start" id="clipHandleStart">
-                      <span class="clip-timeline__time" id="clipStartTime">0:00</span>
+                      <span class="clip-timeline__time" id="clipStartTime">00:00:00.000</span>
                     </div>
                     <div class="clip-timeline__handle clip-timeline__handle--end" id="clipHandleEnd">
-                      <span class="clip-timeline__time" id="clipEndTime">0:00</span>
+                      <span class="clip-timeline__time" id="clipEndTime">00:00:00.000</span>
                     </div>
                     <div class="clip-timeline__playhead" id="clipPlayhead"></div>
                   </div>
@@ -341,6 +394,10 @@
               <label>カテゴリ（複数選択可）</label>
               <div class="category-buttons" id="categoryButtons">
                 <!-- カテゴリボタンは動的に生成されます -->
+              </div>
+              <div class="category-quick-add">
+                <input type="text" id="quickAddCategoryInput" class="form-input form-input--sm" placeholder="新しいカテゴリを追加して選択" autocomplete="off">
+                <button id="quickAddCategoryBtn" type="button" class="btn btn-info btn-sm" title="カテゴリを追加して選択">＋ 追加</button>
               </div>
               <div class="selected-categories" id="selectedCategories"></div>
             </div>
@@ -484,7 +541,7 @@
   <!-- タイムラインホバー時のサムネイルプレビュー -->
   <div class="clip-thumbnail-tooltip" id="clipThumbnailTooltip" style="display:none;">
     <canvas class="clip-thumbnail-canvas" id="clipThumbnailCanvas" width="160" height="90"></canvas>
-    <span class="clip-thumbnail-time" id="clipThumbnailTime">0:00.000</span>
+    <span class="clip-thumbnail-time" id="clipThumbnailTime">00:00:00</span>
   </div>
 
   <script src="renderer.js"></script>

@@ -162,6 +162,51 @@ const InputHistory = {
     }
   },
 
+  remove(key, value) {
+    const list = this.load(key).filter(v => v !== value);
+    try {
+      localStorage.setItem(this.STORAGE_PREFIX + key, JSON.stringify(list));
+    } catch (e) {}
+  },
+
+  /**
+   * .preset-chips コンテナに履歴をチップで描画
+   * @param {string} key - 履歴のキー
+   * @param {HTMLElement} container - コンテナ要素
+   * @param {(value: string) => void} onApply - チップクリック時のコールバック
+   * @param {() => void} [onAfterChange] - 削除後の追加処理（datalistリフレッシュ等）
+   */
+  renderChips(key, container, onApply, onAfterChange) {
+    const list = this.load(key);
+    container.innerHTML = '';
+    list.forEach(value => {
+      const chip = document.createElement('span');
+      chip.className = 'preset-chip';
+      chip.title = value;
+
+      const label = document.createElement('span');
+      label.className = 'preset-chip__label';
+      label.textContent = value;
+      chip.appendChild(label);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'preset-chip__remove';
+      remove.textContent = '×';
+      remove.title = '履歴から削除';
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.remove(key, value);
+        this.renderChips(key, container, onApply, onAfterChange);
+        if (onAfterChange) onAfterChange();
+      });
+      chip.appendChild(remove);
+
+      chip.addEventListener('click', () => onApply(value));
+      container.appendChild(chip);
+    });
+  },
+
   // input要素ごとのrefresh関数を保持（重複バインド防止用）
   _bound: new Map(),
 
@@ -452,8 +497,9 @@ function buildTemplateContext() {
 /**
  * タイムラインクリックモード（"seek" | "range15" | "range30"）
  * タイムラインバー/オーバービューをクリックした際の動作を切り替える
+ * デフォルトは ±30秒 範囲設定（クリップ作成のメインフローに最適化）
  */
-let timelineClickMode = 'seek';
+let timelineClickMode = 'range30';
 function loadTimelineClickMode() {
   try {
     const saved = localStorage.getItem('timelineClickMode');
@@ -509,6 +555,61 @@ function initialize() {
   };
   document.getElementById('rangeFromCurrent15Btn').addEventListener('click', () => rangeFromCurrent(15));
   document.getElementById('rangeFromCurrent30Btn').addEventListener('click', () => rangeFromCurrent(30));
+
+  // メタデータフォームからカテゴリを直接追加
+  initQuickAddCategory();
+}
+
+/**
+ * メタデータフォーム内の「カテゴリ クイック追加」入力欄
+ * 入力 + Enter または「＋ 追加」ボタンで availableCategories に追加し、選択状態にする
+ */
+function initQuickAddCategory() {
+  const input = document.getElementById('quickAddCategoryInput');
+  const btn = document.getElementById('quickAddCategoryBtn');
+  if (!input || !btn) return;
+
+  const addAndSelect = () => {
+    const value = input.value.trim();
+    if (!value) {
+      showToast('カテゴリ名を入力してください', 'warning');
+      input.focus();
+      return;
+    }
+
+    // 既存カテゴリなら選択状態のみ更新
+    if (availableCategories.includes(value)) {
+      if (!metadata.categories.includes(value)) {
+        metadata.categories.push(value);
+      }
+      const existing = Array.from(categoryButtons.querySelectorAll('.btn-category'))
+        .find(b => b.dataset.category === value);
+      if (existing) existing.classList.add('active');
+      updateSelectedCategories();
+      input.value = '';
+      showToast(`「${value}」を選択しました`, 'success', 1500);
+      return;
+    }
+
+    // 新規追加
+    availableCategories.push(value);
+    saveCategories();
+    metadata.categories.push(value);
+
+    renderCategoryButtons();
+    updateSelectedCategories();
+
+    input.value = '';
+    showToast(`カテゴリ「${value}」を追加しました`, 'success');
+  };
+
+  btn.addEventListener('click', addAndSelect);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addAndSelect();
+    }
+  });
 }
 
 /**
@@ -519,6 +620,29 @@ function initInputHistories() {
   InputHistory.bind(downloadUrl, 'downloadUrl');
   InputHistory.bind(videoIdInput, 'videoId', { saveOnEnter: false });
   InputHistory.bind(serifInput, 'serif', { saveOnEnter: false });
+
+  // 検索履歴をチップで可視化
+  refreshSearchHistoryChips();
+}
+
+/**
+ * 検索履歴チップを再描画
+ */
+function refreshSearchHistoryChips() {
+  const container = document.getElementById('searchHistoryChips');
+  if (!container) return;
+  InputHistory.renderChips(
+    'searchQuery',
+    container,
+    (value) => {
+      searchQuery.value = value;
+      searchVideos();
+    },
+    () => {
+      // 削除後は datalist も更新
+      InputHistory.bind(searchQuery, 'searchQuery').refresh();
+    }
+  );
 }
 
 /**
@@ -830,8 +954,10 @@ async function searchVideos() {
 
     if (result.success) {
       displaySearchResults(result.data);
-      // 検索成功時に履歴へ保存
+      // 検索成功時に履歴へ保存・チップを更新
       InputHistory.save('searchQuery', query);
+      refreshSearchHistoryChips();
+      InputHistory.bind(searchQuery, 'searchQuery').refresh();
     } else {
       searchResults.innerHTML = `<p class="error">検索に失敗しました: ${result.error}</p>`;
     }
@@ -1105,6 +1231,7 @@ async function playVideo(fileIndex) {
     }
     previewSection.style.display = 'block';
     videoPlayer.style.display = 'block';
+    document.getElementById('videoToolbar').style.display = 'flex';
     document.getElementById('editTabMessage').style.display = 'none';
     
     // 編集タブに自動切り替え
@@ -1194,18 +1321,15 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// 再生時間をフォーマット
+// 再生時間をフォーマット (HH:MM:SS)
 function formatDuration(seconds) {
   if (!seconds || isNaN(seconds)) return '不明';
-  
+
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
-  
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(secs).padStart(2, '0')}`;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 // 数値をフォーマット
@@ -1258,15 +1382,16 @@ window.addEventListener('DOMContentLoaded', () => {
  * トリミング機能
  */
 
-// 時間を「分:秒.ミリ秒」形式にフォーマット
+// 時間を「HH:MM:SS.mmm」形式にフォーマット（微調整・タイムラインハンドル等の精密表示用）
 function formatTimeWithMillis(seconds) {
-  if (!seconds || isNaN(seconds)) return '0:00.000';
-  
-  const minutes = Math.floor(seconds / 60);
+  if (!seconds || isNaN(seconds)) return '00:00:00.000';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
   const millis = Math.floor((seconds % 1) * 1000);
-  
-  return `${minutes}:${String(secs).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
 }
 
 // トリミング時間表示を更新
@@ -1385,8 +1510,8 @@ function updateClipPanel() {
   const { startTime, endTime } = trimState;
   const dur = endTime - startTime;
   
-  clipPanelStart.textContent = formatTimeWithMillis(startTime);
-  clipPanelEnd.textContent = formatTimeWithMillis(endTime);
+  clipPanelStart.textContent = formatTimeShort(startTime);
+  clipPanelEnd.textContent = formatTimeShort(endTime);
   clipPanelDuration.textContent = `(${dur.toFixed(3)}秒)`;
   
   // URL は autoGenerateClipUrl() が clipUrlInput を更新するのでそこから取得
@@ -1786,7 +1911,7 @@ function initThumbnailPreview(trackEl, timeFromX) {
     tooltip.style.left = `${e.clientX}px`;
     const rect = trackEl.getBoundingClientRect();
     tooltip.style.top = `${rect.top}px`;
-    timeLabel.textContent = formatTimeWithMillis(time);
+    timeLabel.textContent = formatTimeShort(time);
     
     // フレームキャプチャはスロットリング
     if (isCapturing) {
@@ -3391,22 +3516,19 @@ document.addEventListener('keydown', handleGlobalKeyDown);
 function updateCommentButtons() {
   const hasChat = currentVideoFile && currentVideoFile.hasLiveChat;
   if (hasChat) {
-    // DL済み: コメント密度ボタンを目立たせる
+    // DL済み: 密度ボタンを目立たせる
     loadCommentsBtn.classList.remove('btn-warning');
     loadCommentsBtn.classList.add('btn-success');
-    loadCommentsBtn.textContent = 'コメント密度';
-    // DLボタンは目立たなく
-    downloadCommentsBtn.classList.remove('btn-secondary');
-    downloadCommentsBtn.classList.add('btn-outline');
-    downloadCommentsBtn.textContent = 'コメントDL済';
+    loadCommentsBtn.textContent = '💬 密度';
+    loadCommentsBtn.title = 'ライブチャットコメント密度の表示切替（DL済み）';
+    downloadCommentsBtn.title = 'ライブチャットを再ダウンロード（既に取得済み）';
   } else {
-    // 未DL: DLボタンを目立たせる
+    // 未DL: 取得を促す
     loadCommentsBtn.classList.remove('btn-success');
     loadCommentsBtn.classList.add('btn-warning');
-    loadCommentsBtn.textContent = 'コメント密度';
-    downloadCommentsBtn.classList.remove('btn-outline');
-    downloadCommentsBtn.classList.add('btn-secondary');
-    downloadCommentsBtn.textContent = 'コメントDL';
+    loadCommentsBtn.textContent = '💬 密度';
+    loadCommentsBtn.title = 'ライブチャットコメント密度を表示（先にDLが必要）';
+    downloadCommentsBtn.title = 'ライブチャットを yt-dlp でダウンロード';
   }
 }
 
@@ -3432,11 +3554,11 @@ async function loadAndShowCommentDensity(autoMode = false) {
       commentDensityContainer.style.display = 'none';
       hotspotSection.style.display = 'none';
       commentDensityVisible = false;
-      loadCommentsBtn.textContent = 'コメント密度';
+      loadCommentsBtn.textContent = '💬 密度';
       showToast('コメント密度表示をOFFにしました', 'info');
       return;
     }
-    
+
     // 自動モードで既に表示済みなら何もしない
     if (autoMode && commentDensityVisible && commentDensityData) {
       return;
@@ -3455,8 +3577,8 @@ async function loadAndShowCommentDensity(autoMode = false) {
     const result = await window.electronAPI.getCommentDensity(videoId, intervalSec);
 
     if (!result.success || !result.data.exists) {
-      showToast('コメントデータが見つかりません。「コメントDL」で先にダウンロードしてください。', 'warning');
-      loadCommentsBtn.textContent = 'コメント密度';
+      showToast('コメントデータが見つかりません。↻ DLボタンで先にダウンロードしてください。', 'warning');
+      loadCommentsBtn.textContent = '💬 密度';
       loadCommentsBtn.disabled = false;
       return;
     }
@@ -3471,13 +3593,13 @@ async function loadAndShowCommentDensity(autoMode = false) {
     hotspotSection.style.display = 'block';
     detectAndShowHotspots();
 
-    loadCommentsBtn.textContent = 'コメント密度 ON';
+    loadCommentsBtn.textContent = '💬 ON';
     loadCommentsBtn.disabled = false;
     showToast(`コメント密度を表示（${result.data.totalComments}件, ${intervalSec}秒間隔）`, 'success');
   } catch (error) {
     console.error('コメント密度の読み込みエラー:', error);
     showToast(`コメント密度の読み込みに失敗: ${error.message}`, 'error');
-    loadCommentsBtn.textContent = 'コメント密度';
+    loadCommentsBtn.textContent = '💬 密度';
     loadCommentsBtn.disabled = false;
   }
 }
@@ -3610,8 +3732,9 @@ async function downloadLiveChatData() {
     return;
   }
 
+  const originalHTML = downloadCommentsBtn.innerHTML;
   try {
-    downloadCommentsBtn.textContent = 'DL中...';
+    downloadCommentsBtn.textContent = '...';
     downloadCommentsBtn.disabled = true;
     showToast('ライブチャットデータをダウンロード中...', 'info', 5000);
 
@@ -3633,7 +3756,7 @@ async function downloadLiveChatData() {
   } catch (error) {
     showToast(`ダウンロードエラー: ${error.message}`, 'error');
   } finally {
-    downloadCommentsBtn.textContent = 'コメントDL';
+    downloadCommentsBtn.innerHTML = originalHTML;
     downloadCommentsBtn.disabled = false;
   }
 }
@@ -3769,14 +3892,16 @@ function applyCenteredRange(centerTime, range, toastLabel = '範囲を設定') {
 }
 
 /**
- * 短い時間フォーマット（m:ss 形式）
+ * 標準的な時間フォーマット (HH:MM:SS) — 一般表示用
  * @param {number} seconds - 秒数
  * @returns {string} フォーマット済み文字列
  */
 function formatTimeShort(seconds) {
-  const m = Math.floor(seconds / 60);
+  if (!seconds || isNaN(seconds)) seconds = 0;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // ウィンドウリサイズ時にCanvas再描画
@@ -3785,6 +3910,154 @@ window.addEventListener('resize', () => {
     drawCommentDensity();
   }
 });
+
+/**
+ * カスタム動画ツールバー
+ * ネイティブの controls 属性を外し、動画の下に独立したコントロール群を表示する。
+ * 動画フレームに UI が重ならない。
+ */
+(function initVideoToolbar() {
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const iconPlay = playPauseBtn.querySelector('.icon-play');
+  const iconPause = playPauseBtn.querySelector('.icon-pause');
+  const currentTimeEl = document.getElementById('videoCurrentTime');
+  const totalTimeEl = document.getElementById('videoTotalTime');
+  const seekBar = document.getElementById('videoSeekBar');
+  const speedSelect = document.getElementById('playbackSpeedSelect');
+  const muteBtn = document.getElementById('muteBtn');
+  const iconVolume = muteBtn.querySelector('.icon-volume');
+  const iconMute = muteBtn.querySelector('.icon-mute');
+  const volumeBar = document.getElementById('volumeBar');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+  let isSeeking = false;
+
+  // 再生/一時停止トグル
+  playPauseBtn.addEventListener('click', () => {
+    if (!videoPlayer.src) return;
+    if (videoPlayer.paused) {
+      videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    } else {
+      videoPlayer.pause();
+    }
+  });
+
+  // 再生状態に応じてアイコン切替
+  videoPlayer.addEventListener('play', () => {
+    iconPlay.style.display = 'none';
+    iconPause.style.display = '';
+  });
+  videoPlayer.addEventListener('pause', () => {
+    iconPlay.style.display = '';
+    iconPause.style.display = 'none';
+  });
+
+  // 時間表示の更新
+  const updateTimeDisplay = () => {
+    currentTimeEl.textContent = formatTimeShort(videoPlayer.currentTime || 0);
+    totalTimeEl.textContent = formatTimeShort(videoPlayer.duration || 0);
+    if (!isSeeking && videoPlayer.duration) {
+      seekBar.value = String(Math.round((videoPlayer.currentTime / videoPlayer.duration) * 1000));
+    }
+  };
+  videoPlayer.addEventListener('timeupdate', updateTimeDisplay);
+  videoPlayer.addEventListener('loadedmetadata', updateTimeDisplay);
+  videoPlayer.addEventListener('durationchange', updateTimeDisplay);
+
+  // シークバー
+  seekBar.addEventListener('input', () => {
+    if (!videoPlayer.duration) return;
+    isSeeking = true;
+    const ratio = parseInt(seekBar.value, 10) / 1000;
+    videoPlayer.currentTime = ratio * videoPlayer.duration;
+  });
+  seekBar.addEventListener('change', () => { isSeeking = false; });
+
+  // 再生速度
+  speedSelect.addEventListener('change', () => {
+    const rate = parseFloat(speedSelect.value);
+    if (!isNaN(rate) && rate > 0) {
+      videoPlayer.playbackRate = rate;
+      showToast(`再生速度: ${rate}x`, 'info', 1200);
+    }
+  });
+
+  // ミュート
+  muteBtn.addEventListener('click', () => {
+    videoPlayer.muted = !videoPlayer.muted;
+  });
+  videoPlayer.addEventListener('volumechange', () => {
+    const muted = videoPlayer.muted || videoPlayer.volume === 0;
+    iconVolume.style.display = muted ? 'none' : '';
+    iconMute.style.display = muted ? '' : 'none';
+    volumeBar.value = String(videoPlayer.muted ? 0 : videoPlayer.volume);
+  });
+
+  // 音量
+  volumeBar.addEventListener('input', () => {
+    const v = parseFloat(volumeBar.value);
+    videoPlayer.volume = isNaN(v) ? 1 : v;
+    if (v > 0 && videoPlayer.muted) videoPlayer.muted = false;
+  });
+
+  // フルスクリーン
+  fullscreenBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(e => console.error('フルスクリーン解除エラー:', e));
+    } else {
+      videoPlayer.requestFullscreen?.().catch(e => console.error('フルスクリーンエラー:', e));
+    }
+  });
+
+  // スクリーンショット
+  document.getElementById('screenshotBtn').addEventListener('click', takeScreenshot);
+})();
+
+/**
+ * 現在の再生フレームを PNG として保存する
+ * ファイル名はテンプレート（{startAt}/{endAt} を現在時刻で上書き）で生成
+ */
+async function takeScreenshot() {
+  if (!videoPlayer.duration || !videoPlayer.videoWidth) {
+    showToast('動画を読み込んでください', 'warning');
+    return;
+  }
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = videoPlayer.videoWidth;
+    canvas.height = videoPlayer.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    // テンプレートコンテキストを構築（現在の再生位置で startAt/endAt を上書き）
+    const tplCtx = buildTemplateContext();
+    const currentSec = Math.max(0, Math.floor(videoPlayer.currentTime));
+    tplCtx.startAt = String(currentSec).padStart(6, '0');
+    tplCtx.endAt = tplCtx.startAt;
+    const h = Math.floor(currentSec / 3600);
+    const m = Math.floor((currentSec % 3600) / 60);
+    const s = currentSec % 60;
+    const clock = `${String(h).padStart(2,'0')}-${String(m).padStart(2,'0')}-${String(s).padStart(2,'0')}`;
+    tplCtx.startAtClock = clock;
+    tplCtx.endAtClock = clock;
+    tplCtx.duration = '0000';
+
+    const fileName = FileNameTemplate.resolve(FileNameTemplate.get(), tplCtx) ||
+      `${tplCtx.videoId || 'screenshot'}_${tplCtx.startAt}`;
+
+    const result = await window.electronAPI.saveScreenshot(dataUrl, fileName);
+    if (result.success) {
+      showToast(`スクリーンショットを保存しました\n${result.filePath}`, 'success', 4000);
+    } else {
+      showToast(`保存に失敗しました: ${result.error}`, 'error');
+    }
+  } catch (error) {
+    console.error('スクリーンショット保存エラー:', error);
+    showToast(`スクリーンショット保存エラー: ${error.message}`, 'error');
+  }
+}
 
 /**
  * クリップパネルのイベント連携
