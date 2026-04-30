@@ -35,7 +35,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // ダウンローダーの初期化
   downloader = new YouTubeDownloader('./downloads');
-  
+
   createWindow();
 
   app.on('activate', () => {
@@ -82,7 +82,9 @@ ipcMain.handle('download-video', async (event, url, options) => {
       ...options,
       onProgress: (progress) => {
         // 進捗をレンダラープロセスに送信
-        mainWindow.webContents.send('download-progress', progress);
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('download-progress', progress);
+        }
       }
     });
     return { success: true, data: result };
@@ -95,7 +97,9 @@ ipcMain.handle('download-video', async (event, url, options) => {
 ipcMain.handle('download-live-chat', async (event, videoId) => {
   try {
     const result = await downloader.downloadLiveChat(videoId, (progress) => {
-      mainWindow.webContents.send('live-chat-progress', progress);
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('live-chat-progress', progress);
+      }
     });
     return { success: true, data: result };
   } catch (error) {
@@ -158,7 +162,7 @@ ipcMain.handle('load-video-file', async (event, filePath) => {
     if (!fs.existsSync(filePath)) {
       throw new Error('ファイルが見つかりません');
     }
-    
+
     const buffer = fs.readFileSync(filePath);
     return { success: true, data: buffer };
   } catch (error) {
@@ -282,7 +286,7 @@ ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTim
         stderr += data.toString();
         // 進捗情報をレンダラーに送信（オプション）
         const progressMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (progressMatch && mainWindow) {
+        if (progressMatch && mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
           mainWindow.webContents.send('export-progress', progressMatch[1]);
         }
       });

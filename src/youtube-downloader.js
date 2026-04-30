@@ -32,8 +32,10 @@ class YouTubeDownloader {
    */
   async getVideoInfo(url) {
     try {
+      // ライブチャットなど巨大なJSONフィールドを除外しつつバッファを大きめに確保
       const { stdout } = await execAsync(
-        `yt-dlp --dump-json --no-playlist "${url}"`
+        `yt-dlp --dump-json --no-playlist "${url}"`,
+        { maxBuffer: 1024 * 1024 * 50 }
       );
       const info = JSON.parse(stdout);
       return {
@@ -45,11 +47,21 @@ class YouTubeDownloader {
         uploader: info.uploader,
         uploadDate: info.upload_date,
         viewCount: info.view_count,
+        // 画質選択用に詳細フィールドを含める
         formats: info.formats.map(f => ({
           formatId: f.format_id,
           ext: f.ext,
           resolution: f.resolution,
-          filesize: f.filesize
+          filesize: f.filesize,
+          filesizeApprox: f.filesize_approx,
+          vcodec: f.vcodec,
+          acodec: f.acodec,
+          height: f.height,
+          width: f.width,
+          fps: f.fps,
+          tbr: f.tbr,             // 総ビットレート (kbps) — サイズ推定に使用
+          formatNote: f.format_note,
+          protocol: f.protocol
         }))
       };
     } catch (error) {

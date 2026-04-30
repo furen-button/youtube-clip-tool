@@ -488,6 +488,35 @@
   </main>
   </div>
 
+  <!-- 画質選択モーダル（ダウンロード前に画質とサイズを選ばせる） -->
+  <div id="formatSelectModal" class="modal">
+    <div class="modal-content format-modal-content">
+      <div class="modal-header">
+        <h2>画質を選択してダウンロード</h2>
+        <button class="modal-close" id="closeFormatModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="formatModalLoading" class="format-loading" style="display:none;">動画情報を取得中...</div>
+        <div id="formatModalError" class="format-error" style="display:none;"></div>
+
+        <div id="formatModalContent" style="display:none;">
+          <div class="format-video-info" id="formatVideoInfo"></div>
+
+          <div class="format-list-container">
+            <div class="format-list-header">
+              <h3>利用可能な画質</h3>
+              <span class="format-list-hint">⚠ 印は2GiBを超え、再生時に問題が出る可能性があります</span>
+            </div>
+            <div class="format-list" id="formatList"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelFormatBtn">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 出力ファイル名テンプレート設定モーダル -->
   <div id="fileNameTemplateModal" class="modal">
     <div class="modal-content filename-template-modal-content">

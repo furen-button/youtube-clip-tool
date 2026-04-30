@@ -2247,6 +2247,176 @@ header {
   max-width: 760px;
 }
 
+/* 画質選択モーダル */
+.format-modal-content {
+  width: 90%;
+  max-width: 720px;
+}
+
+.format-loading {
+  text-align: center;
+  padding: 30px;
+  color: #718096;
+}
+
+.format-loading::after {
+  content: '...';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+.format-error {
+  padding: 14px 16px;
+  background: #fed7d7;
+  color: #742a2a;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.format-video-info {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #f7fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  align-items: flex-start;
+}
+
+.format-video-info__thumb {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #e2e8f0;
+}
+
+.format-video-info__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.format-video-info__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #2d3748;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.format-video-info__details {
+  font-size: 0.8rem;
+  color: #718096;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.format-list-container {
+  margin-top: 4px;
+}
+
+.format-list-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.format-list-header h3 {
+  font-size: 0.95rem;
+  color: #2d3748;
+  margin: 0;
+}
+
+.format-list-hint {
+  font-size: 0.75rem;
+  color: #a0aec0;
+}
+
+.format-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.format-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  font: inherit;
+  width: 100%;
+}
+
+.format-option:hover {
+  background: #edf2f7;
+  border-color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.15);
+}
+
+.format-option--auto {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+  border-color: #c3dafe;
+}
+
+.format-option__resolution {
+  font-weight: 700;
+  color: #2d3748;
+  font-size: 1rem;
+  min-width: 70px;
+}
+
+.format-option__details {
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.format-option__size {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4a5568;
+  text-align: right;
+  min-width: 90px;
+}
+
+.format-option__size--warn {
+  color: #c05621;
+}
+
+.format-option__size--big {
+  color: #c53030;
+}
+
+.format-option__action {
+  font-size: 0.8rem;
+  color: #667eea;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.format-option__warn-icon {
+  display: inline-block;
+  margin-left: 4px;
+}
+
 /* ファイル名テンプレート設定 */
 .filename-template-info {
   background: #edf2f7;

@@ -1016,7 +1016,10 @@ function openInBrowser(url) {
 }
 
 /**
- * 動画をダウンロード
+ * 動画をダウンロード（画質選択モーダル経由）
+ * 1. URL から動画情報を取得
+ * 2. 画質選択モーダルを表示
+ * 3. ユーザーが選んだ format ID で yt-dlp を実行
  */
 async function downloadVideo() {
   const url = downloadUrl.value.trim();
@@ -1025,13 +1028,21 @@ async function downloadVideo() {
     return;
   }
 
+  await openFormatSelectModal(url);
+}
+
+/**
+ * 選択された format ID でダウンロードを開始
+ * @param {string} url - YouTube動画のURL
+ * @param {string|null} formatId - yt-dlp の format selector（null は既定値を使用）
+ */
+async function startDownloadWithFormat(url, formatId) {
   downloadBtn.disabled = true;
   downloadProgress.style.display = 'block';
   progressBar.style.width = '0%';
   progressText.textContent = '0%';
   showStatus('', '');
 
-  // ダウンロード進捗の監視
   window.electronAPI.onDownloadProgress((progress) => {
     const percentage = Math.round(progress.percentage);
     progressBar.style.width = `${percentage}%`;
@@ -1039,17 +1050,16 @@ async function downloadVideo() {
   });
 
   try {
-    const result = await window.electronAPI.downloadVideo(url);
-    
+    const options = formatId ? { format: formatId } : {};
+    const result = await window.electronAPI.downloadVideo(url, options);
+
     if (result.success) {
       showStatus(`ダウンロードが完了しました: ${result.data.filePath}`, 'success');
       progressBar.style.width = '100%';
       progressText.textContent = '100%';
 
-      // ダウンロード成功時に履歴へ保存
       InputHistory.save('downloadUrl', url);
 
-      // ダウンロード済み動画リストを更新
       setTimeout(() => {
         loadDownloadedVideos();
       }, 500);
@@ -1061,12 +1071,243 @@ async function downloadVideo() {
   } finally {
     downloadBtn.disabled = false;
     window.electronAPI.removeDownloadProgressListener();
-    
-    // プログレスバーを数秒後に非表示
     setTimeout(() => {
       downloadProgress.style.display = 'none';
     }, 3000);
   }
+}
+
+/**
+ * 画質選択モーダルを開いて動画情報を取得・表示する
+ */
+async function openFormatSelectModal(url) {
+  const modal = document.getElementById('formatSelectModal');
+  const loadingEl = document.getElementById('formatModalLoading');
+  const errorEl = document.getElementById('formatModalError');
+  const contentEl = document.getElementById('formatModalContent');
+
+  modal.classList.add('active');
+  loadingEl.style.display = 'block';
+  errorEl.style.display = 'none';
+  contentEl.style.display = 'none';
+
+  try {
+    const result = await window.electronAPI.getVideoInfo(url);
+    if (!result.success) throw new Error(result.error);
+
+    renderFormatModal(url, result.data);
+    loadingEl.style.display = 'none';
+    contentEl.style.display = 'block';
+  } catch (error) {
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.textContent = `動画情報の取得に失敗しました: ${error.message}`;
+    console.error('getVideoInfo error:', error);
+  }
+}
+
+function closeFormatSelectModal() {
+  document.getElementById('formatSelectModal').classList.remove('active');
+}
+
+/**
+ * 動画情報をモーダルに描画し、画質オプションを生成する
+ */
+function renderFormatModal(url, info) {
+  // 動画情報ヘッダー
+  const infoEl = document.getElementById('formatVideoInfo');
+  const durationStr = formatDuration(info.duration);
+  const viewStr = info.viewCount ? formatNumber(info.viewCount) + '回' : '不明';
+  infoEl.innerHTML = `
+    <img class="format-video-info__thumb" src="${escapeHtml(info.thumbnail || '')}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="format-video-info__meta">
+      <div class="format-video-info__title">${escapeHtml(info.title || '')}</div>
+      <div class="format-video-info__details">
+        <span>${escapeHtml(info.uploader || '不明')}</span>
+        <span>長さ: ${durationStr}</span>
+        <span>視聴: ${viewStr}</span>
+      </div>
+    </div>
+  `;
+
+  // 画質オプション一覧を生成
+  const options = pickFormatOptions(info.formats || [], info.duration || 0);
+  const listEl = document.getElementById('formatList');
+  listEl.innerHTML = '';
+
+  // 「自動（最高品質）」を先頭に追加
+  const autoBtn = createFormatButton({
+    isAuto: true,
+    label: '自動（mp4 最高品質）',
+    details: 'yt-dlp 既定（bestvideo[ext=mp4]+bestaudio[ext=m4a]/best）',
+    sizeBytes: null,
+    formatId: null,
+  });
+  listEl.appendChild(autoBtn);
+
+  if (options.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:14px; color:#a0aec0; font-size:0.85rem;';
+    empty.textContent = '解析できる画質情報がありませんでした。「自動」でダウンロードしてください。';
+    listEl.appendChild(empty);
+  } else {
+    options.forEach(opt => {
+      listEl.appendChild(createFormatButton(opt));
+    });
+  }
+
+  // ボタンクリック → ダウンロード開始
+  listEl.querySelectorAll('.format-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const formatId = btn.dataset.formatId || null;
+      closeFormatSelectModal();
+      startDownloadWithFormat(url, formatId);
+    });
+  });
+}
+
+/**
+ * 1つの画質オプションをボタン要素として生成
+ */
+function createFormatButton(opt) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'format-option' + (opt.isAuto ? ' format-option--auto' : '');
+  if (opt.formatId) btn.dataset.formatId = opt.formatId;
+
+  const sizeText = opt.sizeBytes ? formatFileSize(opt.sizeBytes) : '?';
+  const TWO_GIB = 2 * 1024 * 1024 * 1024;
+  const ONE_GIB = 1024 * 1024 * 1024;
+  let sizeClass = '';
+  let warnIcon = '';
+  if (opt.sizeBytes && opt.sizeBytes > TWO_GIB) {
+    sizeClass = 'format-option__size--big';
+    warnIcon = '<span class="format-option__warn-icon" title="2GiBを超えるため再生時に問題が出る可能性">⚠</span>';
+  } else if (opt.sizeBytes && opt.sizeBytes > ONE_GIB) {
+    sizeClass = 'format-option__size--warn';
+  }
+
+  const resoLabel = opt.isAuto ? '⭐ 自動' : (opt.label || `${opt.height}p`);
+  const detailsLabel = opt.details || buildFormatDetails(opt);
+
+  btn.innerHTML = `
+    <span class="format-option__resolution">${escapeHtml(resoLabel)}</span>
+    <span class="format-option__details">${escapeHtml(detailsLabel)}</span>
+    <span class="format-option__size ${sizeClass}">${sizeText}${warnIcon}</span>
+    <span class="format-option__action">DL →</span>
+  `;
+  return btn;
+}
+
+/**
+ * フォーマット詳細を組み立てる（拡張子・コーデック・fps）
+ */
+function buildFormatDetails(opt) {
+  const parts = [];
+  if (opt.ext) parts.push(opt.ext);
+  if (opt.fps) parts.push(`${opt.fps}fps`);
+  if (opt.vcodec) parts.push(simplifyCodec(opt.vcodec));
+  if (opt.acodec && opt.acodec !== 'none') parts.push(simplifyCodec(opt.acodec));
+  return parts.join(' · ');
+}
+
+/**
+ * コーデック文字列を短く整形（avc1.640028 → h264 など）
+ */
+function simplifyCodec(codec) {
+  if (!codec) return '';
+  if (codec.startsWith('avc1')) return 'h264';
+  if (codec.startsWith('vp9')) return 'vp9';
+  if (codec.startsWith('av01')) return 'av1';
+  if (codec.startsWith('mp4a')) return 'aac';
+  if (codec.startsWith('opus')) return 'opus';
+  return codec.split('.')[0];
+}
+
+/**
+ * yt-dlp formats 配列から画質ごとに代表フォーマットを選び、
+ * サイズを推定してオプションリストを返す。
+ *
+ * @param {Array} formats - yt-dlp の formats 配列
+ * @param {number} durationSec - 動画の長さ（秒）— サイズ推定に使用
+ * @returns {Array<{formatId, height, ext, vcodec, acodec, fps, sizeBytes, label}>}
+ */
+function pickFormatOptions(formats, durationSec) {
+  if (!Array.isArray(formats) || formats.length === 0) return [];
+
+  // 動画ストリーム（vcodec が none でない）と音声ストリームを分離
+  const videos = formats.filter(f => f.vcodec && f.vcodec !== 'none' && f.height);
+  const audios = formats.filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'));
+
+  // 最良の音声フォーマット（後でvideo-onlyとマージするため）
+  const bestAudio = audios.reduce((best, f) => {
+    if (!best) return f;
+    return (f.tbr || 0) > (best.tbr || 0) ? f : best;
+  }, null);
+
+  // 解像度（height）ごとに最高ビットレートのフォーマットを選択
+  const byHeight = new Map();
+  for (const f of videos) {
+    const h = f.height;
+    const cur = byHeight.get(h);
+    // 同一解像度では mp4 を優先 → ビットレートが高いもの
+    if (!cur) {
+      byHeight.set(h, f);
+    } else {
+      const curIsMp4 = cur.ext === 'mp4';
+      const fIsMp4 = f.ext === 'mp4';
+      if (fIsMp4 && !curIsMp4) byHeight.set(h, f);
+      else if (fIsMp4 === curIsMp4 && (f.tbr || 0) > (cur.tbr || 0)) byHeight.set(h, f);
+    }
+  }
+
+  const options = [];
+  for (const v of byHeight.values()) {
+    const hasAudio = v.acodec && v.acodec !== 'none';
+    let formatId, sizeBytes, audioForLabel;
+
+    if (hasAudio) {
+      // 単独で音声入りの統合フォーマット
+      formatId = v.formatId;
+      sizeBytes = v.filesize || v.filesizeApprox || estimateSize(v.tbr, durationSec);
+      audioForLabel = v;
+    } else if (bestAudio) {
+      // video-only + best audio をマージ
+      formatId = `${v.formatId}+${bestAudio.formatId}`;
+      const vSize = v.filesize || v.filesizeApprox || estimateSize(v.tbr, durationSec);
+      const aSize = bestAudio.filesize || bestAudio.filesizeApprox || estimateSize(bestAudio.tbr, durationSec);
+      sizeBytes = (vSize || 0) + (aSize || 0);
+      audioForLabel = bestAudio;
+    } else {
+      formatId = v.formatId;
+      sizeBytes = v.filesize || v.filesizeApprox || estimateSize(v.tbr, durationSec);
+      audioForLabel = null;
+    }
+
+    options.push({
+      formatId,
+      label: `${v.height}p`,
+      height: v.height,
+      ext: v.ext,
+      vcodec: v.vcodec,
+      acodec: audioForLabel ? audioForLabel.acodec : null,
+      fps: v.fps,
+      sizeBytes: sizeBytes || null,
+    });
+  }
+
+  // 高画質順にソート
+  options.sort((a, b) => b.height - a.height);
+  return options;
+}
+
+/**
+ * ビットレート（kbps）と長さ（秒）からファイルサイズを推定する。
+ * @returns {number|null} バイト数（情報不足時は null）
+ */
+function estimateSize(tbrKbps, durationSec) {
+  if (!tbrKbps || !durationSec) return null;
+  return Math.round((tbrKbps * 1000 / 8) * durationSec);
 }
 
 /**
@@ -1205,24 +1446,24 @@ async function playVideo(fileIndex) {
   
   // デバッグ情報
   console.log('Loading video:', filePath);
-  
+
   try {
     // IPCを使ってファイルを読み込む
     const result = await window.electronAPI.loadVideoFile(filePath);
-    
+
     if (!result.success) {
       throw new Error(result.error);
     }
-    
+
     // バッファをBlobに変換
     const blob = new Blob([result.data], { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
-    
+
     // 既存のObject URLがあれば解放
     if (videoPlayer.src && videoPlayer.src.startsWith('blob:')) {
       URL.revokeObjectURL(videoPlayer.src);
     }
-    
+
     videoPlayer.src = url;
     // サムネイルプレビュー用video にも同じURLをセット
     const thumbVideo = document.getElementById('thumbnailVideo');
@@ -3470,6 +3711,13 @@ document.getElementById('shortcutModal').addEventListener('click', (e) => {
   if (e.target.id === 'shortcutModal') {
     closeShortcutModal();
   }
+});
+
+// 画質選択モーダル関連
+document.getElementById('closeFormatModal').addEventListener('click', closeFormatSelectModal);
+document.getElementById('cancelFormatBtn').addEventListener('click', closeFormatSelectModal);
+document.getElementById('formatSelectModal').addEventListener('click', (e) => {
+  if (e.target.id === 'formatSelectModal') closeFormatSelectModal();
 });
 
 // 出力ファイル名テンプレート設定モーダル関連

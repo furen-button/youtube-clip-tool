@@ -21,13 +21,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('list-downloaded-videos'),
   
   // ファイル選択ダイアログを表示
-  selectVideoFile: () => 
+  selectVideoFile: () =>
     ipcRenderer.invoke('select-video-file'),
-  
+
   // 動画ファイルを読み込む
   loadVideoFile: (filePath) =>
     ipcRenderer.invoke('load-video-file', filePath),
-  
+
   // メタデータを保存
   saveMetadata: (metadata, fileName) =>
     ipcRenderer.invoke('save-metadata', metadata, fileName),
