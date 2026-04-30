@@ -2352,12 +2352,13 @@ videoPlayer.addEventListener('loadedmetadata', () => {
  */
 
 // WaveSurferを初期化
-function initWaveSurfer() {
+// precomputedPeaks: 事前生成したpeaksデータ（長時間動画でOOMを回避するため）
+function initWaveSurfer(precomputedPeaks = null, videoDuration = null) {
   if (wavesurfer) {
     wavesurfer.destroy();
   }
 
-  wavesurfer = WaveSurfer.create({
+  const wsOptions = {
     container: waveformContainer,
     waveColor: '#667eea',
     progressColor: '#764ba2',
@@ -2374,7 +2375,15 @@ function initWaveSurfer() {
     autoplay: false,
     autoScroll: false,
     interact: true
-  });
+  };
+
+  // peaksを渡すとWaveSurferはWeb Audio APIによるデコードをスキップする
+  if (precomputedPeaks && videoDuration) {
+    wsOptions.peaks = [precomputedPeaks];
+    wsOptions.duration = videoDuration;
+  }
+
+  wavesurfer = WaveSurfer.create(wsOptions);
 
   // Regionsプラグインを初期化
   wavesurferRegions = wavesurfer.registerPlugin(WaveSurfer.Regions.create());
@@ -2516,8 +2525,11 @@ function updateWaveformRegion() {
   }
 }
 
+// 1時間以上の動画は事前生成peaksを使ってOOMクラッシュを回避する
+const LONG_VIDEO_THRESHOLD_SEC = 3600;
+
 // 波形表示を自動的に表示
-function showWaveform() {
+async function showWaveform() {
   if (!videoPlayer.src) {
     return;
   }
@@ -2530,8 +2542,22 @@ function showWaveform() {
   resetZoomBtn.style.display = 'inline-block';
 
   try {
-    // video要素を使用してWaveSurferを初期化
-    initWaveSurfer();
+    const duration = videoPlayer.duration;
+    const isLongVideo = isFinite(duration) && duration >= LONG_VIDEO_THRESHOLD_SEC;
+
+    if (isLongVideo && currentVideoFile && currentVideoFile.path) {
+      waveformLoading.textContent = '長時間動画の波形データを準備中...（初回は数十秒かかります）';
+      const result = await window.electronAPI.generateWaveformPeaks(currentVideoFile.path);
+      if (result.success) {
+        initWaveSurfer(result.peaks, result.duration);
+      } else {
+        console.warn('波形Peaks生成失敗。フォールバックします:', result.error);
+        waveformLoading.textContent = '波形を生成中...';
+        initWaveSurfer();
+      }
+    } else {
+      initWaveSurfer();
+    }
   } catch (error) {
     console.error('波形の読み込みエラー:', error);
     waveformLoading.textContent = '波形の生成に失敗しました';

@@ -70,5 +70,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ダウンロード進捗リスナーの削除
   removeDownloadProgressListener: () => {
     ipcRenderer.removeAllListeners('download-progress');
-  }
+  },
+
+  // 波形Peaksデータを生成（長時間動画のOOMクラッシュ対策）
+  generateWaveformPeaks: (videoPath, pixelsPerSecond = 20) =>
+    ipcRenderer.invoke('generate-waveform-peaks', videoPath, pixelsPerSecond)
 });

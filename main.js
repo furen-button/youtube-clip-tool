@@ -307,3 +307,94 @@ ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTim
     return { success: false, error: error.message };
   }
 });
+
+// 波形データ（Peaks）を事前生成（長時間動画のOOMクラッシュ対策）
+ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSecond = 20) => {
+  try {
+    // キャッシュファイルの確認
+    const peaksCachePath = videoPath.replace(/\.[^.]+$/, '.peaks.json');
+    if (fs.existsSync(peaksCachePath)) {
+      const cached = JSON.parse(fs.readFileSync(peaksCachePath, 'utf-8'));
+      return { success: true, ...cached };
+    }
+
+    // ffprobeで動画の長さを取得
+    const duration = await new Promise((resolve, reject) => {
+      const probe = spawn('ffprobe', [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_streams',
+        videoPath
+      ]);
+      let out = '';
+      probe.stdout.on('data', (d) => { out += d.toString(); });
+      probe.stderr.on('data', () => {});
+      probe.on('close', (code) => {
+        if (code !== 0) { reject(new Error('ffprobe失敗')); return; }
+        try {
+          const data = JSON.parse(out);
+          const stream = data.streams.find(s => s.codec_type === 'audio') || data.streams[0];
+          const dur = parseFloat(stream.duration);
+          if (!isNaN(dur) && dur > 0) { resolve(dur); } else { reject(new Error('動画時間を取得できません')); }
+        } catch (e) { reject(e); }
+      });
+      probe.on('error', reject);
+    });
+
+    // ffmpegでモノラル低サンプルレートのRaw PCMを取得し、ストリーミングでピークを計算
+    const sampleRate = 8000;
+    const totalPeaks = Math.ceil(duration * pixelsPerSecond);
+    const samplesPerPeak = Math.max(1, Math.floor((duration * sampleRate) / totalPeaks));
+
+    const peaks = await new Promise((resolve, reject) => {
+      const maxPeaks = new Array(totalPeaks).fill(0);
+      let sampleIndex = 0;
+      let remainder = Buffer.alloc(0);
+
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', videoPath,
+        '-vn',              // 映像ストリームを除外
+        '-ac', '1',         // モノラル変換
+        '-ar', String(sampleRate),
+        '-f', 'f32le',      // 32bit浮動小数点リトルエンディアン
+        'pipe:1'
+      ]);
+
+      ffmpeg.stdout.on('data', (chunk) => {
+        const data = remainder.length > 0 ? Buffer.concat([remainder, chunk]) : chunk;
+        const floatCount = Math.floor(data.length / 4);
+
+        for (let i = 0; i < floatCount; i++) {
+          const peakIdx = Math.min(Math.floor(sampleIndex / samplesPerPeak), totalPeaks - 1);
+          const absVal = Math.abs(data.readFloatLE(i * 4));
+          if (absVal > maxPeaks[peakIdx]) maxPeaks[peakIdx] = absVal;
+          sampleIndex++;
+        }
+
+        remainder = (floatCount * 4 < data.length)
+          ? data.slice(floatCount * 4)
+          : Buffer.alloc(0);
+      });
+
+      ffmpeg.stderr.on('data', () => {});
+
+      ffmpeg.on('close', (code) => {
+        if (code !== 0) { reject(new Error(`ffmpegがcode ${code}で終了しました`)); return; }
+        resolve(maxPeaks);
+      });
+
+      ffmpeg.on('error', (e) => reject(e));
+    });
+
+    const result = { peaks, duration };
+
+    // キャッシュに保存（失敗は無視）
+    try {
+      fs.writeFileSync(peaksCachePath, JSON.stringify(result), 'utf-8');
+    } catch (_) {}
+
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
