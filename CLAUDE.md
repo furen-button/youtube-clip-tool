@@ -40,8 +40,9 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 
 - **[main.js](main.js)**: すべての I/O（外部プロセス起動、ファイル読み書き、API 呼び出し）を担う。`ipcMain.handle(...)` でハンドラーを公開。
 - **[preload.js](preload.js)**: `contextBridge.exposeInMainWorld('electronAPI', ...)` で、レンダラーから呼べる API を限定列挙する。**新しい IPC を追加する場合は preload.js にもエントリを追加する必要がある**（追加し忘れるとレンダラーから呼べない）。
-- **[renderer.js](renderer.js)**: 単一ファイル・グローバル変数ベースの UI ロジック（モジュール分割なし、約 3500 行）。`require` は使用禁止（`contextIsolation: true`、`nodeIntegration: false`）。
-- **[src/youtube-downloader.js](src/youtube-downloader.js)**: yt-dlp / YouTube Data API v3 を使う `YouTubeDownloader` クラス。main.js が単一インスタンスを保持。
+- **[renderer.js](renderer.js)**: 単一ファイル・グローバル変数ベースの UI ロジック（モジュール分割なし、約 4400 行）。`require` は使用禁止（`contextIsolation: true`、`nodeIntegration: false`）。
+- **[src/youtube-downloader.js](src/youtube-downloader.js)**: yt-dlp を使う `YouTubeDownloader` クラス。`searchVideos` は YouTube Data API v3 を優先し、未設定・失敗時は yt-dlp にフォールバックする。main.js が単一インスタンスを保持。
+- **[src/youtube-api.js](src/youtube-api.js)**: YouTube Data API v3 クライアント（`googleapis` ライブラリ + `dotenv`）。APIキーの取得と `youtube.search.list()` のラッパー。
 
 ### 出力ディレクトリの役割
 
@@ -77,11 +78,12 @@ inputHistory_<key>           textPresets_<key>
 
 `resetAllSettings()`（[renderer.js](renderer.js)）が全キーを削除する正の定義。**新しい永続化キーを追加した場合は、ここにも追加する必要がある**。
 
-### WaveSurfer 統合の注意点
+### CDN 統合の注意点
 
-- WaveSurfer.js v7 は **CDN（unpkg）から `<script>` で読み込み**、グローバル `WaveSurfer` を使用（[index.html](index.html) 参照）。npm パッケージはインストールされているが、未使用。
+- **WaveSurfer.js v7** は **CDN（unpkg）から `<script>` で読み込み**、グローバル `WaveSurfer` を使用（[index.html](index.html) 参照）。npm パッケージはインストールされているが、未使用。
 - `backend: 'MediaElement'` で `videoPlayer` 要素を直接読み込む。動画は `Blob URL` で渡している（`file://` プロトコル不可）。
 - Regions / Minimap プラグインも CDN から読み込み。`wavesurferRegions.on('region-updated')` でドラッグ後 300ms のデバウンスを挟んでループ再生する設計。
+- **simple-keyboard** も **CDN（jsDelivr）から読み込み**、グローバル `SimpleKeyboard` を使用。キーボードショートカットの編集UIに使用。
 
 ### IPC ハンドラーの命名規約
 
