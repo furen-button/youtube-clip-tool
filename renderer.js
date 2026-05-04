@@ -1564,7 +1564,8 @@ function escapeHtml(text) {
 
 // 再生時間をフォーマット (HH:MM:SS)
 function formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return '不明';
+  // 0秒は有効値として扱う（null/undefined/NaN/負値のみ「不明」）
+  if (seconds == null || isNaN(seconds) || seconds < 0) return '不明';
 
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);

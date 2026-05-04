@@ -136,7 +136,7 @@ youtube-clip-tool/
 ### 今後の実装予定
 - [ ] クロップ機能
 - [ ] ライブ配信コメント可視化
-  - yt-dlpでライブ配信のコメントデータをダウンロード（`--write-comments`）
+  - yt-dlpでライブチャットをダウンロード（`--write-subs --sub-langs live_chat`、JSONL 形式で `downloads/{videoId}.live_chat.json` に保存）
   - タイムスタンプごとのコメント密度を計算・可視化（棒グラフ/ヒートマップ）
   - WaveSurfer波形表示へのコメント密度オーバーレイ統合
   - 盛り上がり箇所の自動検出・トリミング位置の提案
@@ -148,4 +148,4 @@ youtube-clip-tool/
 - 動画ファイルは `file://` プロトコルではなく Blob URL で読み込み
 - トリミング時間は秒単位で管理し、表示時にミリ秒でフォーマット
 - メタデータのファイル名は安全な文字のみ使用（特殊文字を `_` に置換）
-- ライブ配信コメントは yt-dlp の `--write-comments` で取得し、JSON形式で `downloads/` に保存
+- ライブ配信コメントは yt-dlp の `--write-subs --sub-langs live_chat` で取得し、JSONL 形式（1行1イベント）で `downloads/{videoId}.live_chat.json` に保存

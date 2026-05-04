@@ -1,10 +1,55 @@
-const { exec } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { promisify } = require('util');
 const { youtube } = require('./youtube-api');
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+// YouTube動画IDのフォーマット（11文字、英数+_/-）
+const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * YouTubeのURLを検証し、許可ホスト + 11文字のvideoId を持つもののみ通す。
+ * 通らない入力でyt-dlpを実行するとシェル経由のコマンドインジェクション源になり得るため、
+ * 必ずこの関数を経由させる。
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isAllowedYouTubeUrl(url) {
+  if (typeof url !== 'string' || url.length > 2048) return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    return false;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+
+  const host = parsed.hostname.toLowerCase();
+  const allowedHosts = [
+    'www.youtube.com',
+    'youtube.com',
+    'm.youtube.com',
+    'music.youtube.com',
+    'youtu.be'
+  ];
+  if (!allowedHosts.includes(host)) return false;
+
+  // videoId を取り出して 11 文字フォーマットを確認
+  let videoId;
+  if (host === 'youtu.be') {
+    videoId = parsed.pathname.replace(/^\//, '').split('/')[0];
+  } else if (parsed.pathname === '/watch') {
+    videoId = parsed.searchParams.get('v');
+  } else {
+    // /shorts/{id} や /live/{id} 等
+    const m = parsed.pathname.match(/^\/(?:shorts|live|embed)\/([^/?#]+)/);
+    videoId = m ? m[1] : null;
+  }
+  return !!videoId && VIDEO_ID_RE.test(videoId);
+}
 
 /**
  * YouTube動画のダウンロードと検索機能を提供するクラス
@@ -31,10 +76,15 @@ class YouTubeDownloader {
    * @returns {Promise<Object>} 動画情報
    */
   async getVideoInfo(url) {
+    if (!isAllowedYouTubeUrl(url)) {
+      throw new Error('動画情報の取得に失敗しました: 不正なURLです');
+    }
     try {
-      // ライブチャットなど巨大なJSONフィールドを除外しつつバッファを大きめに確保
-      const { stdout } = await execAsync(
-        `yt-dlp --dump-json --no-playlist "${url}"`,
+      // execFile + 引数配列でシェルを経由しない（コマンドインジェクション対策）。
+      // yt-dlp の --dump-json は formats など長くなりがちなため maxBuffer を大きめに確保する。
+      const { stdout } = await execFileAsync(
+        'yt-dlp',
+        ['--dump-json', '--no-playlist', url],
         { maxBuffer: 1024 * 1024 * 50 }
       );
       const info = JSON.parse(stdout);
@@ -296,14 +346,23 @@ class YouTubeDownloader {
    * @returns {Promise<Object>} ダウンロード結果（ファイルパスとコメント数）
    */
   async downloadLiveChat(videoId, onProgress = null) {
+    // videoIdは外部入力。シェル経由実行を避けるため、必ず11文字フォーマットでバリデーションする。
+    if (typeof videoId !== 'string' || !VIDEO_ID_RE.test(videoId)) {
+      throw new Error('ライブチャットダウンロードエラー: 不正なvideoIdです');
+    }
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const outputTemplate = path.join(this.downloadDir, `${videoId}.%(ext)s`);
 
     return new Promise((resolve, reject) => {
-      // ライブチャットのみダウンロード（動画はスキップ）
-      const command = `yt-dlp --skip-download --write-subs --sub-langs live_chat -o "${outputTemplate}" --no-playlist "${url}"`;
-
-      const child = exec(command, { maxBuffer: 1024 * 1024 * 50 }); // 50MB
+      // spawn + 引数配列でシェルを経由しない（コマンドインジェクション対策）
+      const child = spawn('yt-dlp', [
+        '--skip-download',
+        '--write-subs',
+        '--sub-langs', 'live_chat',
+        '-o', outputTemplate,
+        '--no-playlist',
+        url
+      ]);
 
       child.stdout.on('data', (data) => {
         const output = data.toString();

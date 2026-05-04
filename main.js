@@ -319,11 +319,13 @@ ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSeco
     }
 
     // ffprobeで動画の長さを取得
+    // ストリーム側に duration が入らないコンテナがあるため、format.duration もフォールバックとして使う
     const duration = await new Promise((resolve, reject) => {
       const probe = spawn('ffprobe', [
         '-v', 'quiet',
         '-print_format', 'json',
         '-show_streams',
+        '-show_format',
         videoPath
       ]);
       let out = '';
@@ -333,8 +335,18 @@ ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSeco
         if (code !== 0) { reject(new Error('ffprobe失敗')); return; }
         try {
           const data = JSON.parse(out);
-          const stream = data.streams.find(s => s.codec_type === 'audio') || data.streams[0];
-          const dur = parseFloat(stream.duration);
+          const streams = Array.isArray(data.streams) ? data.streams : [];
+          const audioStream = streams.find(s => s.codec_type === 'audio');
+          const candidates = [
+            audioStream && audioStream.duration,
+            ...streams.map(s => s && s.duration),
+            data.format && data.format.duration
+          ];
+          let dur = NaN;
+          for (const c of candidates) {
+            const v = parseFloat(c);
+            if (!isNaN(v) && v > 0) { dur = v; break; }
+          }
           if (!isNaN(dur) && dur > 0) { resolve(dur); } else { reject(new Error('動画時間を取得できません')); }
         } catch (e) { reject(e); }
       });
