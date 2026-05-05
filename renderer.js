@@ -1426,7 +1426,10 @@ async function playVideo(fileIndex) {
   
   const file = window.downloadedFilesList[fileIndex];
   const filePath = file.path;
-  
+
+  // 動画切り替え時は前回動画のコメント密度・盛り上がりの状態を破棄
+  resetCommentStateForVideoSwitch();
+
   // 現在の動画ファイル情報を保存
   currentVideoFile = {
     name: file.name,
@@ -3838,6 +3841,30 @@ document.addEventListener('keydown', handleGlobalKeyDown);
 /**
  * コメント関連ボタンの見た目を更新
  */
+/**
+ * 動画切り替え時にコメント密度・盛り上がり関連の状態と UI を初期化する。
+ * 前回動画のキャッシュ／チップが残ったまま新動画に持ち越されるのを防ぐ。
+ */
+function resetCommentStateForVideoSwitch() {
+  // 密度データとキャンバスを破棄
+  commentDensityData = null;
+  commentDensityVisible = false;
+  if (commentDensityContainer) commentDensityContainer.style.display = 'none';
+
+  // 盛り上がりリストとチップを破棄
+  detectedHotspots = [];
+  if (hotspotSection) hotspotSection.style.display = 'none';
+  if (hotspotList) hotspotList.innerHTML = '';
+  if (hotspotCount) hotspotCount.textContent = '';
+
+  // ツールチップ用コメントキャッシュを破棄して、開いていれば閉じる
+  liveChatComments = [];
+  liveChatCommentsVideoId = null;
+  if (typeof HotspotTooltip !== 'undefined' && HotspotTooltip && HotspotTooltip.hide) {
+    HotspotTooltip.hide();
+  }
+}
+
 function updateCommentButtons() {
   const hasChat = currentVideoFile && currentVideoFile.hasLiveChat;
   if (hasChat) {
