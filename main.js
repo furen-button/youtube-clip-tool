@@ -341,13 +341,19 @@ ipcMain.handle('export-video', async (event, url, outputFileName, startTime, end
 });
 
 // 波形データ（Peaks）を事前生成（長時間動画のOOMクラッシュ対策）
+// version 2: ピーク位置をサンプル実時刻から計算するように変更（v1は長時間で時間ドリフト）
+const PEAKS_CACHE_VERSION = 2;
 ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSecond = 20) => {
   try {
     // キャッシュファイルの確認
     const peaksCachePath = videoPath.replace(/\.[^.]+$/, '.peaks.json');
     if (fs.existsSync(peaksCachePath)) {
-      const cached = JSON.parse(fs.readFileSync(peaksCachePath, 'utf-8'));
-      return { success: true, ...cached };
+      try {
+        const cached = JSON.parse(fs.readFileSync(peaksCachePath, 'utf-8'));
+        if (cached && cached.version === PEAKS_CACHE_VERSION) {
+          return { success: true, peaks: cached.peaks, duration: cached.duration };
+        }
+      } catch (_) { /* 壊れたキャッシュは再生成 */ }
     }
 
     // ffprobeで動画の長さを取得
@@ -388,7 +394,9 @@ ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSeco
     // ffmpegでモノラル低サンプルレートのRaw PCMを取得し、ストリーミングでピークを計算
     const sampleRate = 8000;
     const totalPeaks = Math.ceil(duration * pixelsPerSecond);
-    const samplesPerPeak = Math.max(1, Math.floor((duration * sampleRate) / totalPeaks));
+    // ピーク位置はサンプル実時刻 (sampleIndex / sampleRate) から直接計算する。
+    // samplesPerPeak を整数で丸めると長時間動画で時間ドリフトが起きる（例: 1時間時点で約9秒ずれ）。
+    const peakStride = sampleRate / pixelsPerSecond;
 
     const peaks = await new Promise((resolve, reject) => {
       const maxPeaks = new Array(totalPeaks).fill(0);
@@ -409,7 +417,7 @@ ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSeco
         const floatCount = Math.floor(data.length / 4);
 
         for (let i = 0; i < floatCount; i++) {
-          const peakIdx = Math.min(Math.floor(sampleIndex / samplesPerPeak), totalPeaks - 1);
+          const peakIdx = Math.min(Math.floor(sampleIndex / peakStride), totalPeaks - 1);
           const absVal = Math.abs(data.readFloatLE(i * 4));
           if (absVal > maxPeaks[peakIdx]) maxPeaks[peakIdx] = absVal;
           sampleIndex++;
@@ -434,7 +442,11 @@ ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSeco
 
     // キャッシュに保存（失敗は無視）
     try {
-      fs.writeFileSync(peaksCachePath, JSON.stringify(result), 'utf-8');
+      fs.writeFileSync(
+        peaksCachePath,
+        JSON.stringify({ version: PEAKS_CACHE_VERSION, ...result }),
+        'utf-8'
+      );
     } catch (_) {}
 
     return { success: true, ...result };
