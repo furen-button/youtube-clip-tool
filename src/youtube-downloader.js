@@ -653,3 +653,5 @@ class YouTubeDownloader {
 }
 
 module.exports = YouTubeDownloader;
+module.exports.isAllowedYouTubeUrl = isAllowedYouTubeUrl;
+module.exports.VIDEO_ID_RE = VIDEO_ID_RE;

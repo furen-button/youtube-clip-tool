@@ -2781,42 +2781,67 @@ saveMetadataBtn.addEventListener('click', async () => {
   }
 });
 
-// 動画を書き出し（FFmpeg）
+// 動画を書き出し（YouTubeから指定区間のみダウンロード + mp4再エンコード）
 exportVideoBtn.addEventListener('click', async () => {
   // 動画が読み込まれているか確認
-  if (!currentVideoFile || !currentVideoFile.path) {
+  if (!currentVideoFile) {
     showToast('動画を読み込んでください', 'warning');
     return;
   }
-  
+
   // トリミング範囲が設定されているか確認
   if (!videoPlayer.duration || trimState.duration <= 0) {
     showToast('トリミング範囲を設定してください', 'warning');
     return;
   }
-  
+
   // ファイル名が設定されているか確認
   const fileName = fileNameInput.value.trim() || metadata.fileName;
   if (!fileName) {
     showToast('ファイル名を入力してください', 'warning');
     return;
   }
-  
+
+  // YouTube URL を解決する
+  // 優先順位: メタデータの url → メタデータの videoId → ファイル名から抽出した videoId
+  let url = (currentVideoFile.metadata && currentVideoFile.metadata.url) || '';
+  if (!url) {
+    const vid = (currentVideoFile.metadata && currentVideoFile.metadata.videoId)
+      || (currentVideoFile.name && currentVideoFile.name.match(/([a-zA-Z0-9_-]{11})/)?.[1])
+      || metadata.videoId;
+    if (vid) url = `https://www.youtube.com/watch?v=${vid}`;
+  }
+  if (!url) {
+    showToast('YouTubeのURLまたは動画IDを特定できませんでした', 'error');
+    return;
+  }
+
   try {
     // ボタンを無効化
     exportVideoBtn.disabled = true;
     exportVideoBtn.textContent = '書き出し中...';
-    
-    showToast('動画の書き出しを開始しました', 'info');
-    
-    // FFmpegで動画を書き出し
+
+    // 進捗をトーストではなくボタン表示に反映する
+    window.electronAPI.onExportProgress((info) => {
+      if (info && typeof info === 'object') {
+        if (info.stage === 'encoding') {
+          exportVideoBtn.textContent = '再エンコード中...';
+        } else if (typeof info.percentage === 'number') {
+          exportVideoBtn.textContent = `DL中 ${Math.floor(info.percentage)}%`;
+        }
+      }
+    });
+
+    showToast('YouTubeから指定区間をダウンロードして書き出します', 'info');
+
+    // YouTubeから区間ダウンロード + mp4再エンコード
     const result = await window.electronAPI.exportVideo(
-      currentVideoFile.path,
+      url,
       fileName,
       trimState.startTime,
       trimState.endTime
     );
-    
+
     if (result.success) {
       showToast(`動画を書き出しました\n保存先: ${result.outputPath}`, 'success', 5000);
     } else {
@@ -2829,6 +2854,9 @@ exportVideoBtn.addEventListener('click', async () => {
     // ボタンを有効化
     exportVideoBtn.disabled = false;
     exportVideoBtn.textContent = '動画を書き出し (MP4)';
+    if (window.electronAPI.removeExportProgressListener) {
+      window.electronAPI.removeExportProgressListener();
+    }
   }
 });
 

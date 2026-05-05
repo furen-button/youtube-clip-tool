@@ -32,9 +32,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveMetadata: (metadata, fileName) =>
     ipcRenderer.invoke('save-metadata', metadata, fileName),
   
-  // 動画を書き出し
-  exportVideo: (inputPath, outputFileName, startTime, endTime) =>
-    ipcRenderer.invoke('export-video', inputPath, outputFileName, startTime, endTime),
+  // 動画を書き出し（YouTubeから指定区間のみダウンロード + mp4再エンコード）
+  exportVideo: (url, outputFileName, startTime, endTime) =>
+    ipcRenderer.invoke('export-video', url, outputFileName, startTime, endTime),
+
+  // エクスポート進捗リスナーの削除
+  removeExportProgressListener: () => {
+    ipcRenderer.removeAllListeners('export-progress');
+  },
 
   // スクリーンショット（PNG）を保存
   saveScreenshot: (dataUrl, fileName) =>

@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const YouTubeDownloader = require('./src/youtube-downloader');
+const { isAllowedYouTubeUrl, VIDEO_ID_RE } = require('./src/youtube-downloader');
 
 let mainWindow;
 let downloader;
@@ -245,9 +246,23 @@ ipcMain.handle('save-screenshot', async (event, dataUrl, fileName) => {
   }
 });
 
-// FFmpegで動画をトリミングして書き出し
-ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTime, endTime) => {
+// YouTubeから指定区間のみダウンロードしてmp4で書き出し（再エンコード）
+// yt-dlp の --download-sections で必要な区間のみ取得し、--force-keyframes-at-cuts で
+// 区間端を正確にカットしたうえで --recode-video mp4 で mp4 へ再エンコードする。
+ipcMain.handle('export-video', async (event, url, outputFileName, startTime, endTime) => {
   try {
+    // URL バリデーション（コマンドインジェクション対策・想定外URLの拒否）
+    if (!isAllowedYouTubeUrl(url)) {
+      throw new Error('不正なYouTube URLです');
+    }
+
+    // 時間バリデーション
+    const start = Number(startTime);
+    const end = Number(endTime);
+    if (!isFinite(start) || !isFinite(end) || start < 0 || end <= start) {
+      throw new Error('開始/終了時間が不正です');
+    }
+
     const outputBaseDir = path.join(__dirname, 'output', 'movies');
 
     // テンプレート由来の "/" を含むファイル名を、サブディレクトリ + ベース名 に分解
@@ -258,49 +273,66 @@ ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTim
     }
 
     const outputPath = path.join(outputDir, `${baseName}.mp4`);
-    
-    // 入力ファイルの存在確認
-    if (!fs.existsSync(inputPath)) {
-      throw new Error('入力ファイルが見つかりません');
+
+    // 既存ファイルがあれば事前に削除（yt-dlp の上書き警告を避ける）
+    if (fs.existsSync(outputPath)) {
+      try { fs.unlinkSync(outputPath); } catch (_) {}
     }
-    
-    // FFmpegコマンドを実行
-    // -ss: 開始時間, -to: 終了時間, -i: 入力ファイル, -c: コーデック(copy=再エンコードなし)
-    const duration = endTime - startTime;
-    const ffmpegArgs = [
-      '-ss', startTime.toString(),
-      '-t', duration.toString(),
-      '-i', inputPath,
-      '-c', 'copy',
-      '-avoid_negative_ts', '1',
-      '-y', // 上書き確認なし
-      outputPath
+
+    // yt-dlp 引数（spawn + 配列でシェル経由なし）
+    const args = [
+      '-f', 'bv*+ba/b',
+      '--download-sections', `*${start.toFixed(3)}-${end.toFixed(3)}`,
+      '--force-keyframes-at-cuts',
+      '--recode-video', 'mp4',
+      '--no-playlist',
+      '--no-part',
+      '-o', outputPath,
+      url
     ];
-    
+
     return new Promise((resolve, reject) => {
-      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-      
+      const child = spawn('yt-dlp', args);
       let stderr = '';
-      
-      ffmpeg.stderr.on('data', (data) => {
-        stderr += data.toString();
-        // 進捗情報をレンダラーに送信（オプション）
-        const progressMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (progressMatch && mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-          mainWindow.webContents.send('export-progress', progressMatch[1]);
+      let lastSent = -1;
+
+      const sendProgress = (info) => {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('export-progress', info);
+        }
+      };
+
+      child.stdout.on('data', (data) => {
+        const out = data.toString();
+        // yt-dlp の進捗（[download]   12.3% of ...）をパース
+        const m = out.match(/(\d+\.?\d*)%/);
+        if (m) {
+          const pct = parseFloat(m[1]);
+          if (Math.floor(pct) !== lastSent) {
+            lastSent = Math.floor(pct);
+            sendProgress({ percentage: pct, stage: 'download', output: out });
+          }
+        }
+        // 後処理（マージ/再エンコード）の表示
+        if (/Merger|VideoRemuxer|VideoConvertor|ffmpeg/i.test(out)) {
+          sendProgress({ percentage: 100, stage: 'encoding', output: out });
         }
       });
-      
-      ffmpeg.on('close', (code) => {
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      child.on('close', (code) => {
         if (code === 0) {
           resolve({ success: true, outputPath });
         } else {
-          reject(new Error(`FFmpeg exited with code ${code}\n${stderr}`));
+          reject(new Error(`yt-dlpがcode ${code}で終了しました\n${stderr}`));
         }
       });
-      
-      ffmpeg.on('error', (error) => {
-        reject(new Error(`FFmpeg error: ${error.message}`));
+
+      child.on('error', (error) => {
+        reject(new Error(`yt-dlp実行エラー: ${error.message}`));
       });
     });
   } catch (error) {
