@@ -125,6 +125,8 @@ const hotspotThresholdValue = document.getElementById('hotspotThresholdValue');
 const hotspotCount = document.getElementById('hotspotCount');
 const hotspotList = document.getElementById('hotspotList');
 let detectedHotspots = []; // 検出された盛り上がり箇所
+let liveChatComments = []; // 盛り上がりホバー時に表示するパース済みコメント
+let liveChatCommentsVideoId = null; // 上記キャッシュの対象 videoId
 
 // カテゴリ設定
 const defaultCategories = ['面白い', '感動', '驚き', '癒し', '学び', 'その他'];
@@ -4072,6 +4074,8 @@ async function downloadLiveChatData() {
       updateCommentButtons();
       // ダウンロード後、密度表示を自動的にON
       commentDensityData = null; // キャッシュクリア
+      liveChatComments = [];
+      liveChatCommentsVideoId = null;
       await loadAndShowCommentDensity(true);
     } else {
       showToast(`ダウンロードに失敗: ${result.error}`, 'error');
@@ -4161,7 +4165,8 @@ function detectAndShowHotspots() {
     const chipClass = intensity > 0.7 ? 'hotspot-chip-hot' : 'hotspot-chip-warm';
     const durationSec = hs.endTime - hs.startTime;
     return `
-      <button class="hotspot-chip ${chipClass}" 
+      <button class="hotspot-chip ${chipClass}"
+              data-hotspot-idx="${i}"
               onclick="jumpToHotspot(${hs.startTime}, ${hs.endTime})"
               title="ピーク: ${hs.peakCount}件/${intervalSec}秒 | 区間: ${formatTimeShort(hs.startTime)} ~ ${formatTimeShort(hs.endTime)}">
         <span class="hotspot-chip-time">${formatTimeShort(hs.startTime)}</span>
@@ -4170,6 +4175,145 @@ function detectAndShowHotspots() {
     `;
   }).join('');
 }
+
+/**
+ * 盛り上がり区間内のコメントを表示するツールチップ
+ * チップ hover 時に getLiveChatData を遅延ロードし、区間内コメントを一覧表示する。
+ */
+const HotspotTooltip = {
+  el: null,
+  currentChip: null,
+  MAX_COMMENTS: 60,
+  HIDE_DELAY_MS: 180, // チップ離脱からツールチップへ移動するための猶予
+  _hideTimer: null,
+
+  _ensureEl() {
+    if (this.el) return this.el;
+    this.el = document.createElement('div');
+    this.el.className = 'hotspot-tooltip';
+    this.el.hidden = true;
+    document.body.appendChild(this.el);
+
+    // ツールチップ上に乗ったら非表示予約をキャンセル、外れたら再予約
+    this.el.addEventListener('mouseenter', () => this._cancelHide());
+    this.el.addEventListener('mouseleave', () => this.scheduleHide());
+    return this.el;
+  },
+
+  _cancelHide() {
+    if (this._hideTimer) {
+      clearTimeout(this._hideTimer);
+      this._hideTimer = null;
+    }
+  },
+
+  scheduleHide() {
+    this._cancelHide();
+    this._hideTimer = setTimeout(() => this.hide(), this.HIDE_DELAY_MS);
+  },
+
+  async ensureComments(videoId) {
+    if (!videoId) return false;
+    if (liveChatCommentsVideoId === videoId && liveChatComments.length > 0) return true;
+    try {
+      const res = await window.electronAPI.getLiveChatData(videoId);
+      if (res && res.success && res.data && res.data.exists) {
+        liveChatComments = res.data.comments || [];
+        liveChatCommentsVideoId = videoId;
+        return true;
+      }
+    } catch (_) { /* noop */ }
+    return false;
+  },
+
+  _renderHTML(startTime, endTime) {
+    const inRange = liveChatComments.filter(
+      c => c.offsetTimeSec >= startTime && c.offsetTimeSec <= endTime
+    );
+    const header = `<div class="hotspot-tooltip__header">${escapeHtml(formatTimeShort(startTime))} 〜 ${escapeHtml(formatTimeShort(endTime))} (${inRange.length}件)</div>`;
+
+    if (inRange.length === 0) {
+      return header + '<div class="hotspot-tooltip__empty">この区間のコメントは取得できていません</div>';
+    }
+
+    const shown = inRange.slice(0, this.MAX_COMMENTS);
+    const list = shown.map((c) => {
+      const t = formatTimeShort(c.offsetTimeSec);
+      const cls = c.type === 'superchat' || c.type === 'supersticker'
+        ? 'hotspot-tooltip__comment is-superchat'
+        : 'hotspot-tooltip__comment';
+      const amount = c.amount
+        ? `<span class="hotspot-tooltip__amount">${escapeHtml(c.amount)}</span>`
+        : '';
+      return `<div class="${cls}">
+        <span class="hotspot-tooltip__time">${escapeHtml(t)}</span>
+        <span class="hotspot-tooltip__author">${escapeHtml(c.author || '')}${amount}</span>
+        <span class="hotspot-tooltip__msg">${escapeHtml(c.message || '')}</span>
+      </div>`;
+    }).join('');
+    const more = inRange.length > this.MAX_COMMENTS
+      ? `<div class="hotspot-tooltip__more">…ほか ${inRange.length - this.MAX_COMMENTS} 件</div>`
+      : '';
+    return header + '<div class="hotspot-tooltip__list">' + list + '</div>' + more;
+  },
+
+  show(targetEl, startTime, endTime) {
+    this._cancelHide();
+    const el = this._ensureEl();
+    el.innerHTML = this._renderHTML(startTime, endTime);
+    el.hidden = false;
+
+    // 一旦原点に置いてサイズを測ってからクランプ配置
+    el.style.left = '0px';
+    el.style.top = '0px';
+    const rect = targetEl.getBoundingClientRect();
+    const tip = el.getBoundingClientRect();
+    const margin = 8;
+    let left = rect.left + rect.width / 2 - tip.width / 2;
+    let top = rect.top - tip.height - 8;
+    if (left < margin) left = margin;
+    if (left + tip.width > window.innerWidth - margin) {
+      left = window.innerWidth - tip.width - margin;
+    }
+    if (top < margin) top = rect.bottom + 8; // 上に収まらないなら下に出す
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  },
+
+  hide() {
+    this._cancelHide();
+    if (this.el) this.el.hidden = true;
+    this.currentChip = null;
+  }
+};
+
+// 盛り上がりチップ hover 時にツールチップを表示（イベント委譲）
+hotspotList.addEventListener('mouseover', async (e) => {
+  const chip = e.target.closest('.hotspot-chip');
+  if (!chip) return;
+  HotspotTooltip._cancelHide();
+  HotspotTooltip.currentChip = chip;
+
+  const idx = parseInt(chip.dataset.hotspotIdx, 10);
+  const hs = detectedHotspots[idx];
+  if (!hs) return;
+
+  const videoId = (videoIdInput.value || '').trim() || metadata.videoId;
+  await HotspotTooltip.ensureComments(videoId);
+
+  // await 中に別チップへ移動 / 離脱した場合は表示しない
+  if (HotspotTooltip.currentChip !== chip) return;
+  HotspotTooltip.show(chip, hs.startTime, hs.endTime);
+});
+
+hotspotList.addEventListener('mouseout', (e) => {
+  const chip = e.target.closest('.hotspot-chip');
+  if (!chip) return;
+  // チップ内の子要素間の移動はリーブ扱いにしない
+  if (chip.contains(e.relatedTarget)) return;
+  // ツールチップ側へ移動する場合があるので、即hideせず遅延させる
+  HotspotTooltip.scheduleHide();
+});
 
 /**
  * 盛り上がり箇所にジャンプ（クリック時の処理）

@@ -938,19 +938,20 @@ section h2 {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
-  max-height: 70px;
+  max-height: 210px;
   overflow-y: auto;
 }
 
 .hotspot-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 12px;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.75rem;
   cursor: pointer;
   border: none;
+  margin-top: 10px;
   transition: transform 0.1s, box-shadow 0.1s;
   white-space: nowrap;
 }
@@ -977,6 +978,90 @@ section h2 {
 .hotspot-chip-count {
   font-size: 0.7rem;
   opacity: 0.8;
+}
+
+/* 盛り上がりチップのホバーで表示するコメントツールチップ */
+.hotspot-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  max-height: 360px;
+  overflow-y: auto;
+  background: #1a202c;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.hotspot-tooltip__header {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #fbd38d;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #2d3748;
+}
+
+.hotspot-tooltip__list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hotspot-tooltip__comment {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 110px) 1fr;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.hotspot-tooltip__comment.is-superchat {
+  background: rgba(236, 201, 75, 0.12);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.hotspot-tooltip__time {
+  color: #90cdf4;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+}
+
+.hotspot-tooltip__author {
+  color: #a0aec0;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotspot-tooltip__msg {
+  color: #e2e8f0;
+  word-break: break-word;
+}
+
+.hotspot-tooltip__amount {
+  color: #f6ad55;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.hotspot-tooltip__empty {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.hotspot-tooltip__more {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #2d3748;
+  color: #a0aec0;
+  font-size: 0.7rem;
+  text-align: center;
 }
 
 /* コントロール内の区切り */
