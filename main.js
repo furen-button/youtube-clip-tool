@@ -35,7 +35,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // ダウンローダーの初期化
   downloader = new YouTubeDownloader('./downloads');
-  
+
   createWindow();
 
   app.on('activate', () => {
@@ -82,9 +82,45 @@ ipcMain.handle('download-video', async (event, url, options) => {
       ...options,
       onProgress: (progress) => {
         // 進捗をレンダラープロセスに送信
-        mainWindow.webContents.send('download-progress', progress);
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('download-progress', progress);
+        }
       }
     });
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ライブチャットデータをダウンロード
+ipcMain.handle('download-live-chat', async (event, videoId) => {
+  try {
+    const result = await downloader.downloadLiveChat(videoId, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('live-chat-progress', progress);
+      }
+    });
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ライブチャットデータを取得（パース済み）
+ipcMain.handle('get-live-chat-data', async (event, videoId) => {
+  try {
+    const result = downloader.getLiveChatData(videoId);
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// コメント密度データを取得
+ipcMain.handle('get-comment-density', async (event, videoId, intervalSec) => {
+  try {
+    const result = downloader.getCommentDensity(videoId, intervalSec);
     return { success: true, data: result };
   } catch (error) {
     return { success: false, error: error.message };
@@ -126,7 +162,7 @@ ipcMain.handle('load-video-file', async (event, filePath) => {
     if (!fs.existsSync(filePath)) {
       throw new Error('ファイルが見つかりません');
     }
-    
+
     const buffer = fs.readFileSync(filePath);
     return { success: true, data: buffer };
   } catch (error) {
@@ -134,23 +170,76 @@ ipcMain.handle('load-video-file', async (event, filePath) => {
   }
 });
 
+/**
+ * 出力名/サブディレクトリの安全化
+ * テンプレートの "/" はサブフォルダ区切りとして扱い、各セグメント内の禁止文字のみを置換する。
+ * @param {string} rawName - テンプレート解決後のパス (例: "Channel/2023-01-01-Title-000010-000020")
+ * @param {string} fallback - 解決後が空だったときの fallback 名
+ * @returns {{ subDirs: string[], baseName: string }}
+ */
+function resolveOutputSubpath(rawName, fallback = 'output') {
+  const cleaned = String(rawName || '')
+    .split(/[\\/]+/)
+    .map(seg => seg
+      // OS共通で禁止される文字 + 制御文字を _ に
+      .replace(/[<>:"|?*\x00-\x1f]/g, '_')
+      // セグメント先頭末尾のドット・空白を除去
+      .replace(/^[\s.]+|[\s.]+$/g, '')
+      .trim()
+    )
+    .filter(seg => seg.length > 0);
+
+  if (cleaned.length === 0) {
+    return { subDirs: [], baseName: fallback };
+  }
+
+  const baseName = cleaned.pop();
+  return { subDirs: cleaned, baseName };
+}
+
 // メタデータをJSONファイルとして保存
 ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
   try {
-    // output/json ディレクトリを作成
-    const outputDir = path.join(__dirname, 'output', 'json');
+    const outputBaseDir = path.join(__dirname, 'output', 'json');
+
+    // テンプレート由来の "/" を含むファイル名を、サブディレクトリ + ベース名 に分解
+    const { subDirs, baseName } = resolveOutputSubpath(fileName, 'metadata');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
-    // ファイル名を生成
-    const safeFileName = (fileName || 'metadata').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filePath = path.join(outputDir, `${safeFileName}.json`);
-    
-    // JSONファイルを保存
+
+    const filePath = path.join(outputDir, `${baseName}.json`);
+
     fs.writeFileSync(filePath, JSON.stringify(metadata, null, 2), 'utf-8');
-    
+
     return { success: true, filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// スクリーンショット（PNG）を保存
+ipcMain.handle('save-screenshot', async (event, dataUrl, fileName) => {
+  try {
+    const outputBaseDir = path.join(__dirname, 'output', 'screenshots');
+
+    const { subDirs, baseName } = resolveOutputSubpath(fileName, 'screenshot');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputPath = path.join(outputDir, `${baseName}.png`);
+
+    // data URL の base64 部分を抽出して書き込む
+    const matches = String(dataUrl || '').match(/^data:image\/png;base64,(.+)$/);
+    if (!matches) {
+      throw new Error('スクリーンショットデータが不正です');
+    }
+    fs.writeFileSync(outputPath, matches[1], 'base64');
+
+    return { success: true, filePath: outputPath };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -159,15 +248,16 @@ ipcMain.handle('save-metadata', async (event, metadata, fileName) => {
 // FFmpegで動画をトリミングして書き出し
 ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTime, endTime) => {
   try {
-    // output/movies ディレクトリを作成
-    const outputDir = path.join(__dirname, 'output', 'movies');
+    const outputBaseDir = path.join(__dirname, 'output', 'movies');
+
+    // テンプレート由来の "/" を含むファイル名を、サブディレクトリ + ベース名 に分解
+    const { subDirs, baseName } = resolveOutputSubpath(outputFileName, 'output');
+    const outputDir = path.join(outputBaseDir, ...subDirs);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
-    // 出力ファイルパス
-    const safeFileName = outputFileName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const outputPath = path.join(outputDir, `${safeFileName}.mp4`);
+
+    const outputPath = path.join(outputDir, `${baseName}.mp4`);
     
     // 入力ファイルの存在確認
     if (!fs.existsSync(inputPath)) {
@@ -196,7 +286,7 @@ ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTim
         stderr += data.toString();
         // 進捗情報をレンダラーに送信（オプション）
         const progressMatch = stderr.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (progressMatch && mainWindow) {
+        if (progressMatch && mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
           mainWindow.webContents.send('export-progress', progressMatch[1]);
         }
       });
@@ -213,6 +303,109 @@ ipcMain.handle('export-video', async (event, inputPath, outputFileName, startTim
         reject(new Error(`FFmpeg error: ${error.message}`));
       });
     });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// 波形データ（Peaks）を事前生成（長時間動画のOOMクラッシュ対策）
+ipcMain.handle('generate-waveform-peaks', async (event, videoPath, pixelsPerSecond = 20) => {
+  try {
+    // キャッシュファイルの確認
+    const peaksCachePath = videoPath.replace(/\.[^.]+$/, '.peaks.json');
+    if (fs.existsSync(peaksCachePath)) {
+      const cached = JSON.parse(fs.readFileSync(peaksCachePath, 'utf-8'));
+      return { success: true, ...cached };
+    }
+
+    // ffprobeで動画の長さを取得
+    // ストリーム側に duration が入らないコンテナがあるため、format.duration もフォールバックとして使う
+    const duration = await new Promise((resolve, reject) => {
+      const probe = spawn('ffprobe', [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_streams',
+        '-show_format',
+        videoPath
+      ]);
+      let out = '';
+      probe.stdout.on('data', (d) => { out += d.toString(); });
+      probe.stderr.on('data', () => {});
+      probe.on('close', (code) => {
+        if (code !== 0) { reject(new Error('ffprobe失敗')); return; }
+        try {
+          const data = JSON.parse(out);
+          const streams = Array.isArray(data.streams) ? data.streams : [];
+          const audioStream = streams.find(s => s.codec_type === 'audio');
+          const candidates = [
+            audioStream && audioStream.duration,
+            ...streams.map(s => s && s.duration),
+            data.format && data.format.duration
+          ];
+          let dur = NaN;
+          for (const c of candidates) {
+            const v = parseFloat(c);
+            if (!isNaN(v) && v > 0) { dur = v; break; }
+          }
+          if (!isNaN(dur) && dur > 0) { resolve(dur); } else { reject(new Error('動画時間を取得できません')); }
+        } catch (e) { reject(e); }
+      });
+      probe.on('error', reject);
+    });
+
+    // ffmpegでモノラル低サンプルレートのRaw PCMを取得し、ストリーミングでピークを計算
+    const sampleRate = 8000;
+    const totalPeaks = Math.ceil(duration * pixelsPerSecond);
+    const samplesPerPeak = Math.max(1, Math.floor((duration * sampleRate) / totalPeaks));
+
+    const peaks = await new Promise((resolve, reject) => {
+      const maxPeaks = new Array(totalPeaks).fill(0);
+      let sampleIndex = 0;
+      let remainder = Buffer.alloc(0);
+
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', videoPath,
+        '-vn',              // 映像ストリームを除外
+        '-ac', '1',         // モノラル変換
+        '-ar', String(sampleRate),
+        '-f', 'f32le',      // 32bit浮動小数点リトルエンディアン
+        'pipe:1'
+      ]);
+
+      ffmpeg.stdout.on('data', (chunk) => {
+        const data = remainder.length > 0 ? Buffer.concat([remainder, chunk]) : chunk;
+        const floatCount = Math.floor(data.length / 4);
+
+        for (let i = 0; i < floatCount; i++) {
+          const peakIdx = Math.min(Math.floor(sampleIndex / samplesPerPeak), totalPeaks - 1);
+          const absVal = Math.abs(data.readFloatLE(i * 4));
+          if (absVal > maxPeaks[peakIdx]) maxPeaks[peakIdx] = absVal;
+          sampleIndex++;
+        }
+
+        remainder = (floatCount * 4 < data.length)
+          ? data.slice(floatCount * 4)
+          : Buffer.alloc(0);
+      });
+
+      ffmpeg.stderr.on('data', () => {});
+
+      ffmpeg.on('close', (code) => {
+        if (code !== 0) { reject(new Error(`ffmpegがcode ${code}で終了しました`)); return; }
+        resolve(maxPeaks);
+      });
+
+      ffmpeg.on('error', (e) => reject(e));
+    });
+
+    const result = { peaks, duration };
+
+    // キャッシュに保存（失敗は無視）
+    try {
+      fs.writeFileSync(peaksCachePath, JSON.stringify(result), 'utf-8');
+    } catch (_) {}
+
+    return { success: true, ...result };
   } catch (error) {
     return { success: false, error: error.message };
   }

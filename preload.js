@@ -21,13 +21,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('list-downloaded-videos'),
   
   // ファイル選択ダイアログを表示
-  selectVideoFile: () => 
+  selectVideoFile: () =>
     ipcRenderer.invoke('select-video-file'),
-  
+
   // 動画ファイルを読み込む
   loadVideoFile: (filePath) =>
     ipcRenderer.invoke('load-video-file', filePath),
-  
+
   // メタデータを保存
   saveMetadata: (metadata, fileName) =>
     ipcRenderer.invoke('save-metadata', metadata, fileName),
@@ -35,6 +35,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 動画を書き出し
   exportVideo: (inputPath, outputFileName, startTime, endTime) =>
     ipcRenderer.invoke('export-video', inputPath, outputFileName, startTime, endTime),
+
+  // スクリーンショット（PNG）を保存
+  saveScreenshot: (dataUrl, fileName) =>
+    ipcRenderer.invoke('save-screenshot', dataUrl, fileName),
+  
+  // ライブチャットデータをダウンロード
+  downloadLiveChat: (videoId) =>
+    ipcRenderer.invoke('download-live-chat', videoId),
+  
+  // ライブチャットデータを取得（パース済み）
+  getLiveChatData: (videoId) =>
+    ipcRenderer.invoke('get-live-chat-data', videoId),
+  
+  // コメント密度データを取得
+  getCommentDensity: (videoId, intervalSec = 5) =>
+    ipcRenderer.invoke('get-comment-density', videoId, intervalSec),
   
   // ダウンロード進捗の監視
   onDownloadProgress: (callback) => {
@@ -46,8 +62,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('export-progress', (event, progress) => callback(progress));
   },
   
+  // ライブチャットダウンロード進捗の監視
+  onLiveChatProgress: (callback) => {
+    ipcRenderer.on('live-chat-progress', (event, progress) => callback(progress));
+  },
+  
   // ダウンロード進捗リスナーの削除
   removeDownloadProgressListener: () => {
     ipcRenderer.removeAllListeners('download-progress');
-  }
+  },
+
+  // 波形Peaksデータを生成（長時間動画のOOMクラッシュ対策）
+  generateWaveformPeaks: (videoPath, pixelsPerSecond = 20) =>
+    ipcRenderer.invoke('generate-waveform-peaks', videoPath, pixelsPerSecond)
 });
