@@ -2741,6 +2741,49 @@ function katakanaToHiragana(str) {
   });
 }
 
+/**
+ * 現在の動画から YouTube URL を解決する
+ * 優先順位: メタデータの url → メタデータの videoId → ファイル名から抽出した videoId → metadata.videoId
+ * @returns {string} 解決できなかった場合は空文字列
+ */
+function resolveYouTubeUrlForCurrentVideo() {
+  if (!currentVideoFile) return '';
+  let url = (currentVideoFile.metadata && currentVideoFile.metadata.url) || '';
+  if (url) return url;
+  const vid = (currentVideoFile.metadata && currentVideoFile.metadata.videoId)
+    || (currentVideoFile.name && currentVideoFile.name.match(/([a-zA-Z0-9_-]{11})/)?.[1])
+    || metadata.videoId;
+  return vid ? `https://www.youtube.com/watch?v=${vid}` : '';
+}
+
+/**
+ * 「動画を書き出し」と同等の yt-dlp コマンド文字列を生成する。
+ * 端末にそのまま貼り付けて実行できるようにシェルクォートする。
+ * @param {string} url - YouTube URL
+ * @param {number} startTime - 開始秒
+ * @param {number} endTime - 終了秒
+ * @param {string} fileName - 出力ファイル名（拡張子なし、サブディレクトリ可）
+ * @returns {string}
+ */
+function buildExportCommand(url, startTime, endTime, fileName) {
+  const start = Number(startTime).toFixed(3);
+  const end = Number(endTime).toFixed(3);
+  const outPath = `output/movies/${fileName}.mp4`;
+  // POSIX シェル風シングルクォート。文字列中の ' は '\'' で閉じて再オープンする。
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  return [
+    'yt-dlp',
+    '-f', q('bv*+ba/b'),
+    '--download-sections', q(`*${start}-${end}`),
+    '--force-keyframes-at-cuts',
+    '--recode-video', 'mp4',
+    '--no-playlist',
+    '--no-part',
+    '-o', q(outPath),
+    q(url)
+  ].join(' ');
+}
+
 // メタデータの保存（JSON）
 saveMetadataBtn.addEventListener('click', async () => {
   // フォームデータを収集
@@ -2750,14 +2793,22 @@ saveMetadataBtn.addEventListener('click', async () => {
   metadata.ruby = rubyInput.value.trim();
   metadata.clipUrl = clipUrlInput.value.trim();
   metadata.memo = memoInput.value.trim();
-  
+
+  // 書き出しコマンドを生成（URLが解決できる場合のみ）
+  const exportUrl = resolveYouTubeUrlForCurrentVideo();
+  const saveFileName = metadata.fileName || 'metadata';
+  const exportCommand = exportUrl
+    ? buildExportCommand(exportUrl, trimState.startTime, trimState.endTime, saveFileName)
+    : null;
+
   // トリミング情報も含める
   const saveData = {
     ...metadata,
     trimming: {
       startTime: trimState.startTime,
       endTime: trimState.endTime,
-      duration: trimState.duration
+      duration: trimState.duration,
+      command: exportCommand
     },
     videoFile: currentVideoFile,
     createdAt: new Date().toISOString()
@@ -2803,14 +2854,7 @@ exportVideoBtn.addEventListener('click', async () => {
   }
 
   // YouTube URL を解決する
-  // 優先順位: メタデータの url → メタデータの videoId → ファイル名から抽出した videoId
-  let url = (currentVideoFile.metadata && currentVideoFile.metadata.url) || '';
-  if (!url) {
-    const vid = (currentVideoFile.metadata && currentVideoFile.metadata.videoId)
-      || (currentVideoFile.name && currentVideoFile.name.match(/([a-zA-Z0-9_-]{11})/)?.[1])
-      || metadata.videoId;
-    if (vid) url = `https://www.youtube.com/watch?v=${vid}`;
-  }
+  const url = resolveYouTubeUrlForCurrentVideo();
   if (!url) {
     showToast('YouTubeのURLまたは動画IDを特定できませんでした', 'error');
     return;
