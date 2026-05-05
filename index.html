@@ -122,9 +122,12 @@
 
       <!-- タブ3: 動画編集 -->
       <div class="tab-content" id="editTab">
-        <div class="edit-layout">
-          <!-- 左側: 動画プレイヤーエリア（固定） -->
-          <div class="edit-left-panel">
+        <div class="edit-layout edit-layout--3col">
+          <!-- 1列目: 動画 -->
+          <div class="edit-column edit-column--video">
+            <div class="edit-column-header">
+              <h3>動画</h3>
+            </div>
             <div id="editTabMessage" class="info-message">
               左の「ダウンロード済み動画選択」タブから動画を選択してください
             </div>
@@ -170,48 +173,13 @@
             <!-- サムネイル取得専用の非表示 video（メイン再生に影響を与えない） -->
             <video id="thumbnailVideo" style="display:none;" muted preload="auto"></video>
             <div class="video-info" id="videoInfo"></div>
-
-            <!-- クリップパネル: タイトル・時間範囲・URL・主要アクション -->
-            <div class="clip-panel" id="clipPanel" style="display: none;">
-              <div class="clip-panel__header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 11l3 3L22 4"/>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-                <span>クリップ情報</span>
-              </div>
-
-              <div class="clip-panel__body">
-                <div class="clip-panel__field">
-                  <label for="clipTitle">タイトル</label>
-                  <input type="text" id="clipTitle" class="clip-panel__input" placeholder="クリップのタイトルを入力">
-                </div>
-
-                <div class="clip-panel__range">
-                  <span id="clipPanelStart">00:00:00</span>
-                  <span class="clip-panel__range-sep">〜</span>
-                  <span id="clipPanelEnd">00:00:00</span>
-                  <span class="clip-panel__duration" id="clipPanelDuration">(0.000秒)</span>
-                </div>
-
-                <div class="clip-panel__field clip-panel__field--url">
-                  <label>クリップURL</label>
-                  <div class="clip-panel__url-row">
-                    <input type="text" id="clipPanelUrl" class="clip-panel__input" readonly>
-                    <button id="clipPanelCopyUrlBtn" class="btn btn-sm btn-secondary" title="URLをクリップボードにコピー">コピー</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="clip-panel__actions">
-                <button id="clipPanelSaveBtn" class="btn btn-primary btn-sm">💾 JSON保存</button>
-                <button id="clipPanelExportBtn" class="btn btn-success btn-sm">🎬 MP4エクスポート</button>
-              </div>
-            </div>
           </div>
 
-          <!-- 右側: コントロールエリア（スクロール可能） -->
-          <div class="edit-right-panel">
+          <!-- 列リサイザ（動画 ⇔ トリミング） -->
+          <div class="col-resizer" data-resizer="1" role="separator" aria-orientation="vertical" aria-label="動画列の幅を調整" tabindex="0"></div>
+
+          <!-- 2列目: トリミング設定 -->
+          <div class="edit-column edit-column--trimming">
             <!-- トリミング設定（波形統合） -->
             <div class="trimming-section" id="trimmingSection">
               <div class="section-header">
@@ -347,19 +315,22 @@
                 <button id="setEndBtn" class="btn btn-primary btn-sm">現在位置を終了に</button>
               </div>
             </div>
+          </div>
 
-        <!-- 動画プレビューセクション -->
-        <div class="preview-section" id="previewSection">
+          <!-- 列リサイザ（トリミング ⇔ メタデータ） -->
+          <div class="col-resizer" data-resizer="2" role="separator" aria-orientation="vertical" aria-label="メタデータ列の幅を調整" tabindex="0"></div>
 
-        <!-- メタデータ編集（折りたたみ可能） -->
-        <details class="metadata-section collapsible-section" id="metadataSection" open>
-          <summary class="collapsible-summary">
-            <span class="collapsible-summary__icon" aria-hidden="true">▾</span>
-            <h3>詳細メタデータ編集</h3>
-            <span class="collapsible-summary__hint">クリックで開閉</span>
-          </summary>
+          <!-- 3列目: メタデータ編集 -->
+          <div class="edit-column edit-column--metadata">
+            <!-- 動画プレビューセクション -->
+            <div class="preview-section" id="previewSection">
 
-          <div class="metadata-form">
+            <!-- メタデータ編集 -->
+            <section class="metadata-section" id="metadataSection">
+              <div class="metadata-section__header">
+                <h3>メタデータ編集</h3>
+              </div>
+              <div class="metadata-form">
             <div class="form-group">
               <label for="videoId">YouTube Video ID</label>
               <div class="input-with-button">
@@ -421,10 +392,10 @@
               <button id="exportVideoBtn" class="btn btn-primary">動画を書き出し (MP4)</button>
               <button id="clearMetadataBtn" class="btn btn-secondary">クリア</button>
             </div>
-          </div>
-        </details>
-        </div><!-- preview-section -->
-          </div><!-- edit-right-panel -->
+              </div><!-- metadata-form -->
+            </section><!-- metadata-section -->
+            </div><!-- preview-section -->
+          </div><!-- edit-column--metadata -->
         </div><!-- edit-layout -->
       </div><!-- editTab -->
   <!-- キーボードショートカット設定モーダル -->

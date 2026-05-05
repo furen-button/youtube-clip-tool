@@ -663,9 +663,6 @@ function initTextPresets() {
     TextPresets.render('serif', serifChips, (value) => {
       serifInput.value = value;
       metadata.serif = value;
-      // セリフはタイトルと双方向同期しているので、クリップタイトルも更新
-      const clipTitleInput = document.getElementById('clipTitle');
-      if (clipTitleInput) clipTitleInput.value = value;
       serifInput.dispatchEvent(new Event('input', { bubbles: true }));
       showToast('セリフプリセットを適用しました', 'success', 1500);
     });
@@ -1731,34 +1728,9 @@ function updateClipOverviewUI() {
   }
 }
 
-/**
- * クリップパネルを更新（時刻範囲・URL・パネル表示制御）
- */
-const clipPanelEl = document.getElementById('clipPanel');
-const clipTitleInput = document.getElementById('clipTitle');
-const clipPanelStart = document.getElementById('clipPanelStart');
-const clipPanelEnd = document.getElementById('clipPanelEnd');
-const clipPanelDuration = document.getElementById('clipPanelDuration');
-const clipPanelUrl = document.getElementById('clipPanelUrl');
-
-function updateClipPanel() {
-  if (!videoPlayer.duration) {
-    clipPanelEl.style.display = 'none';
-    return;
-  }
-  
-  clipPanelEl.style.display = 'block';
-  
-  const { startTime, endTime } = trimState;
-  const dur = endTime - startTime;
-  
-  clipPanelStart.textContent = formatTimeShort(startTime);
-  clipPanelEnd.textContent = formatTimeShort(endTime);
-  clipPanelDuration.textContent = `(${dur.toFixed(3)}秒)`;
-  
-  // URL は autoGenerateClipUrl() が clipUrlInput を更新するのでそこから取得
-  clipPanelUrl.value = clipUrlInput.value || '';
-}
+// クリップパネルは 3 列構成への変更で削除済み。
+// 旧 updateClipPanel の呼び出し箇所が残っていてもクラッシュしないようにダミー関数を残す。
+function updateClipPanel() {}
 
 // 波形をトリミング範囲にズーム
 function updateWaveformZoom() {
@@ -3682,7 +3654,7 @@ function resetFileNameTemplate() {
 
 // 全設定をリセット
 function resetAllSettings() {
-  if (!confirm('全ての設定をデフォルトに戻しますか？\n\n以下の設定がリセットされます：\n・カテゴリ設定\n・キーボードショートカット\n・微調整フレーム設定\n・入力履歴（検索/URL/Video ID/セリフ）\n・テキストプリセット（セリフ/メモ）\n・タイムラインクリックモード\n・ファイル名テンプレート\n\nこの操作は取り消せません。')) {
+  if (!confirm('全ての設定をデフォルトに戻しますか？\n\n以下の設定がリセットされます：\n・カテゴリ設定\n・キーボードショートカット\n・微調整フレーム設定\n・入力履歴（検索/URL/Video ID/セリフ）\n・テキストプリセット（セリフ/メモ）\n・タイムラインクリックモード\n・ファイル名テンプレート\n・編集タブの列幅\n\nこの操作は取り消せません。')) {
     return;
   }
 
@@ -3693,6 +3665,7 @@ function resetAllSettings() {
     localStorage.removeItem('fineTuneSettings');
     localStorage.removeItem('timelineClickMode');
     localStorage.removeItem(FileNameTemplate.STORAGE_KEY);
+    ColumnResizer.reset();
 
     // 入力履歴をクリア
     ['searchQuery', 'downloadUrl', 'videoId', 'serif'].forEach(key => {
@@ -4406,47 +4379,91 @@ async function takeScreenshot() {
   }
 }
 
+// クリップパネルは削除されたため、関連イベントは不要。
+
 /**
- * クリップパネルのイベント連携
+ * 編集タブの列幅リサイザ
+ * - 1列目（動画）と3列目（メタデータ）の幅を CSS 変数で制御。
+ * - リサイザをドラッグすると両端の固定幅を増減し、真ん中（トリミング）が残り全幅を取る。
+ * - 設定は localStorage[editColumnWidths] に永続化（resetAllSettings の対象に追加）。
  */
-// クリップタイトル ↔ セリフ の双方向同期
-clipTitleInput.addEventListener('input', (e) => {
-  serifInput.value = e.target.value;
-  metadata.serif = e.target.value;
-});
-serifInput.addEventListener('input', (e) => {
-  if (clipTitleInput.value !== e.target.value) {
-    clipTitleInput.value = e.target.value;
-  }
-});
+const ColumnResizer = {
+  STORAGE_KEY: 'editColumnWidths',
+  MIN: 240,
+  MAX: 900,
+  DEFAULTS: { col1: 360, col3: 380 },
 
-// クリップURLコピーボタン
-document.getElementById('clipPanelCopyUrlBtn').addEventListener('click', async () => {
-  const url = clipPanelUrl.value;
-  if (!url) {
-    showToast('URLが生成されていません', 'warning');
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast('クリップURLをコピーしました', 'success');
-  } catch (error) {
-    showToast('コピーに失敗しました', 'error');
-    console.error(error);
-  }
-});
+  init() {
+    const layout = document.querySelector('.edit-layout--3col');
+    if (!layout) return;
 
-// JSON保存ボタン（既存の saveMetadataBtn を呼び出す）
-document.getElementById('clipPanelSaveBtn').addEventListener('click', () => {
-  saveMetadataBtn.click();
-});
+    // 保存値を反映
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '{}'); } catch (_) {}
+    if (typeof stored.col1 === 'number') this._setVar(layout, '--col1-width', stored.col1);
+    if (typeof stored.col3 === 'number') this._setVar(layout, '--col3-width', stored.col3);
 
-// MP4エクスポートボタン（既存の exportVideoBtn を呼び出す）
-document.getElementById('clipPanelExportBtn').addEventListener('click', () => {
-  exportVideoBtn.click();
-});
+    layout.querySelectorAll('.col-resizer').forEach((handle) => {
+      handle.addEventListener('mousedown', (e) => this._onDragStart(e, handle, layout));
+    });
+  },
+
+  _setVar(layout, name, px) {
+    const clamped = Math.max(this.MIN, Math.min(this.MAX, px));
+    layout.style.setProperty(name, `${clamped}px`);
+    return clamped;
+  },
+
+  _save(layout) {
+    const styles = getComputedStyle(layout);
+    const col1 = parseFloat(styles.getPropertyValue('--col1-width'));
+    const col3 = parseFloat(styles.getPropertyValue('--col3-width'));
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify({ col1, col3 }));
+    } catch (_) {}
+  },
+
+  _onDragStart(e, handle, layout) {
+    e.preventDefault();
+    const which = handle.dataset.resizer; // '1' or '2'
+    const startX = e.clientX;
+    const styles = getComputedStyle(layout);
+    const startCol1 = parseFloat(styles.getPropertyValue('--col1-width'));
+    const startCol3 = parseFloat(styles.getPropertyValue('--col3-width'));
+    handle.classList.add('is-dragging');
+    document.body.classList.add('is-col-resizing');
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      if (which === '1') {
+        this._setVar(layout, '--col1-width', startCol1 + dx);
+      } else {
+        // 右側のリサイザは右に動かすほど col3 が縮む
+        this._setVar(layout, '--col3-width', startCol3 - dx);
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      handle.classList.remove('is-dragging');
+      document.body.classList.remove('is-col-resizing');
+      this._save(layout);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  },
+
+  reset() {
+    const layout = document.querySelector('.edit-layout--3col');
+    if (!layout) return;
+    this._setVar(layout, '--col1-width', this.DEFAULTS.col1);
+    this._setVar(layout, '--col3-width', this.DEFAULTS.col3);
+    try { localStorage.removeItem(this.STORAGE_KEY); } catch (_) {}
+  }
+};
 
 // 初期化
 initialize();
 loadShortcuts();
+ColumnResizer.init();
 

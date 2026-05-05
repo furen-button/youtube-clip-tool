@@ -72,7 +72,7 @@ renderer.js はファイル分割されていないが、論理的に以下の�
 
 ```
 availableCategories          fineTuneSettings        keyboardShortcuts
-timelineClickMode            fileNameTemplate
+timelineClickMode            fileNameTemplate        editColumnWidths
 inputHistory_<key>           textPresets_<key>
 ```
 

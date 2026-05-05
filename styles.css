@@ -12,9 +12,9 @@ body {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 20px;
+  padding: 12px 16px;
 }
 
 header {
@@ -101,7 +101,7 @@ header p {
   font-weight: 500;
 }
 
-/* 編集画面のレイアウト */
+/* 編集画面のレイアウト（3列） */
 .edit-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -109,6 +109,66 @@ header p {
   min-height: calc(100vh - 300px);
 }
 
+.edit-layout--3col {
+  /* 動画 / リサイザ / トリミング / リサイザ / メタデータ の 5 トラック。
+     1列目と3列目はピクセル指定（リサイザでドラッグ調整・localStorage に永続化）、
+     真ん中は残り全幅を取る fr。リサイザ自体は 6px 固定。 */
+  --col1-width: 360px;
+  --col3-width: 380px;
+  grid-template-columns: var(--col1-width) 6px minmax(380px, 1fr) 6px var(--col3-width);
+  gap: 0;
+}
+
+.edit-column {
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+  padding: 0 8px;
+  min-width: 0; /* grid 子要素が内容で広がるのを防ぐ */
+}
+
+.col-resizer {
+  background: #e2e8f0;
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.col-resizer:hover,
+.col-resizer.is-dragging {
+  background: #667eea;
+}
+
+.col-resizer::before {
+  /* ドラッグしやすいようヒット領域を視覚要素より広げる */
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: -3px;
+}
+
+body.is-col-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.edit-column-header {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.edit-column-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #667eea;
+}
+
+/* 後方互換: 既存の 2 カラム構造（他画面/将来用）に対するスタイル */
 .edit-left-panel {
   position: sticky;
   top: 20px;
@@ -123,9 +183,10 @@ header p {
 }
 
 /* 動画プレイヤーのサイズ調整 */
+.edit-column--video .video-player,
 .edit-left-panel .video-player {
   width: 100%;
-  max-height: 400px;
+  max-height: 360px;
   border-radius: 8px 8px 0 0;
   background-color: black;
   display: block;
@@ -1363,119 +1424,6 @@ section h2 {
   font-variant-numeric: tabular-nums;
 }
 
-/* クリップパネル（左ペイン下、videoPlayer直下に配置） */
-.clip-panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 14px;
-  margin-top: 12px;
-  animation: fadeIn 0.3s ease;
-}
-
-.clip-panel__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #2d3748;
-  margin-bottom: 10px;
-}
-
-.clip-panel__header svg {
-  color: #667eea;
-}
-
-.clip-panel__body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.clip-panel__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.clip-panel__field label {
-  font-size: 11px;
-  color: #718096;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.clip-panel__input {
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-  width: 100%;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-
-.clip-panel__input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.clip-panel__input[readonly] {
-  background-color: #f7fafc;
-  color: #4a5568;
-  cursor: text;
-}
-
-.clip-panel__range {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #667eea;
-  font-variant-numeric: tabular-nums;
-  padding: 6px 10px;
-  background: #f7fafc;
-  border-radius: 6px;
-}
-
-.clip-panel__range-sep {
-  color: #cbd5e0;
-}
-
-.clip-panel__duration {
-  color: #718096;
-  font-size: 13px;
-  font-weight: 500;
-  margin-left: auto;
-}
-
-.clip-panel__url-row {
-  display: flex;
-  gap: 6px;
-}
-
-.clip-panel__url-row .clip-panel__input {
-  flex: 1;
-  font-size: 12px;
-  font-family: 'SF Mono', Menlo, monospace;
-}
-
-.clip-panel__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-
-.clip-panel__actions .btn {
-  flex: 1;
-  min-width: 0;
-}
-
 .slider-container {
   display: flex;
   flex-direction: column;
@@ -1653,8 +1601,16 @@ section h2 {
   margin-top: 15px;
 }
 
+.metadata-section__header {
+  margin: -15px -15px 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 8px 8px 0 0;
+  background: #f7fafc;
+}
+
 .metadata-section h3 {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: #667eea;
   margin: 0;
 }
@@ -2026,21 +1982,51 @@ section h2 {
   .edit-layout {
     grid-template-columns: 1fr;
   }
-  
+
   .edit-left-panel {
     position: relative;
     top: 0;
     max-height: none;
     width: 100%;
   }
-  
+
   .edit-right-panel {
     width: 100%;
     max-height: none;
   }
-  
+
   .edit-left-panel .video-player {
     max-height: 60vh;
+  }
+}
+
+/* 中サイズ画面: 3列が窮屈な場合は2行に落とす（動画+トリミングの2列、メタデータは下段全幅） */
+@media (max-width: 1280px) {
+  .edit-layout--3col {
+    grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.4fr);
+    grid-template-areas:
+      "video trimming"
+      "metadata metadata";
+  }
+  .edit-column--video { grid-area: video; }
+  .edit-column--trimming { grid-area: trimming; }
+  .edit-column--metadata { grid-area: metadata; max-height: none; }
+  /* このサイズではリサイザを隠す（grid-areas を使うため位置が崩れる） */
+  .edit-layout--3col > .col-resizer { display: none; }
+}
+
+/* 狭い画面: 3列とも縦積み */
+@media (max-width: 900px) {
+  .edit-layout--3col {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "video"
+      "trimming"
+      "metadata";
+  }
+  .edit-column {
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
