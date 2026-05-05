@@ -2918,7 +2918,10 @@ videoIdInput.addEventListener('input', (e) => {
   autoGenerateClipUrl();
 });
 fileNameInput.addEventListener('input', (e) => metadata.fileName = e.target.value.trim());
-serifInput.addEventListener('input', (e) => metadata.serif = e.target.value.trim());
+serifInput.addEventListener('input', (e) => {
+  metadata.serif = e.target.value.trim();
+  autoGenerateFileName();
+});
 rubyInput.addEventListener('input', (e) => metadata.ruby = e.target.value.trim());
 clipUrlInput.addEventListener('input', (e) => metadata.clipUrl = e.target.value.trim());
 memoInput.addEventListener('input', (e) => metadata.memo = e.target.value.trim());
