@@ -40,7 +40,7 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 
 - **[main.js](main.js)**: すべての I/O（外部プロセス起動、ファイル読み書き、API 呼び出し）を担う。`ipcMain.handle(...)` でハンドラーを公開。
 - **[preload.js](preload.js)**: `contextBridge.exposeInMainWorld('electronAPI', ...)` で、レンダラーから呼べる API を限定列挙する。**新しい IPC を追加する場合は preload.js にもエントリを追加する必要がある**（追加し忘れるとレンダラーから呼べない）。
-- **[renderer.js](renderer.js)**: 単一ファイル・グローバル変数ベースの UI ロジック（モジュール分割なし、約 4400 行）。`require` は使用禁止（`contextIsolation: true`、`nodeIntegration: false`）。
+- **[renderer.js](renderer.js)**: グローバル状態の宣言と、動画検索・ダウンロード・再生・カテゴリ管理・初期化・トリミング調整のオーケストレーター（約 750 行）。`require` は使用禁止（`contextIsolation: true`、`nodeIntegration: false`）。機能別ロジックは `src/renderer/` 以下に分割されている（下表参照）。
 - **[src/youtube-downloader.js](src/youtube-downloader.js)**: yt-dlp を使う `YouTubeDownloader` クラス。`searchVideos` は YouTube Data API v3 を優先し、未設定・失敗時は yt-dlp にフォールバックする。main.js が単一インスタンスを保持。
 - **[src/youtube-api.js](src/youtube-api.js)**: YouTube Data API v3 クライアント（`googleapis` ライブラリ + `dotenv`）。APIキーの取得と `youtube.search.list()` のラッパー。
 
@@ -54,17 +54,45 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 
 `save-metadata` と `export-video` はテンプレートに `/` を含むファイル名を **サブディレクトリ + ベース名** として解釈する（[main.js](main.js) の `resolveOutputSubpath`）。各セグメントは禁止文字を `_` に置換する。
 
-### レンダラー内の主要モジュール（renderer.js 内）
+### レンダラーのモジュール構成
 
-renderer.js はファイル分割されていないが、論理的に以下のオブジェクト／領域に分かれている:
+`contextIsolation: true` / `nodeIntegration: false` のため ES Modules は使用不可。
+通常の `<script>` タグを依存順に読み込み、すべての関数・オブジェクトはグローバルスコープで共有する。
 
-- **`InputHistory`** — 入力履歴。`localStorage[inputHistory_<key>]` に最大 20 件保存し、`<datalist>` でサジェスト。同じ input への再 `bind()` は重複イベント防止のため `_bound` Map で管理。
-- **`TextPresets`** — セリフ／メモのプリセットチップ。`localStorage[textPresets_<key>]`。
-- **`FileNameTemplate`** — 出力ファイル名テンプレート。12 種のトークン（`{videoId}`, `{channelTitle}`, `{publishDate}`, `{startAt}`, `{startAtClock}`, `{serif}` 等）を `TOKENS` 配列で一元定義。`resolve()` がトークン置換 + パス正規化を行う。
-- **`buildTemplateContext()`** — `currentVideoFile.metadata`（yt-dlp 由来の `uploadDate` 等）と `trimState`、`metadata` を合成してテンプレート用 ctx を生成。
-- **クリップタイムライン** — `clipViewState` がメインタイムラインの表示範囲（波形のズームと同期）を保持。オーバービュー（動画全体）と二段構成。`handleTimelineClick()` で修飾キー（Shift=±15s, Alt=±30s）と `timelineClickMode` の優先順位を解決。
-- **`shortcuts` / `defaultShortcuts`** — キーボードショートカット定義。編集中は `editingShortcutId` で状態管理。
-- **`trimState`** — `{ startTime, endTime, duration, isLooping }`。`updateTrimDisplay()` を経由して UI 全体（タイムライン UI、波形 region、ファイル名、URL、クリップパネル）を更新する。
+| ファイル | 責務 |
+|---|---|
+| [src/renderer/utils.js](src/renderer/utils.js) | 純粋ユーティリティ（`escapeHtml`, `formatDuration`, `formatTimeShort`, `showToast` 等） |
+| [src/renderer/dom-elements.js](src/renderer/dom-elements.js) | DOM 要素取得（`const videoPlayer = getElementById(...)` 等、全要素をここで宣言） |
+| [src/renderer/storage.js](src/renderer/storage.js) | `InputHistory`・`TextPresets`（localStorage ベースの UI ヘルパー） |
+| [src/renderer/file-name.js](src/renderer/file-name.js) | `FileNameTemplate`・`buildTemplateContext()`・`autoGenerateFileName()`・エクスポート・テンプレートモーダル |
+| [src/renderer/waveform.js](src/renderer/waveform.js) | WaveSurfer 波形表示（`initWaveSurfer`・Region 同期・ズーム） |
+| [src/renderer/clip-timeline.js](src/renderer/clip-timeline.js) | クリップタイムライン（ハンドルドラッグ・オーバービュー・サムネプレビュー・再生ヘッドアニメーション） |
+| [src/renderer/comments.js](src/renderer/comments.js) | コメント密度・盛り上がり検出・`HotspotTooltip` |
+| [src/renderer/shortcuts.js](src/renderer/shortcuts.js) | キーボードショートカット定義・編集モーダル・`handleGlobalKeyDown`・フレーム微調整 |
+| [src/renderer/layout.js](src/renderer/layout.js) | `ColumnResizer`（編集タブ 3 列幅リサイザ） |
+| [renderer.js](renderer.js) | グローバル状態変数・カテゴリ管理・ダウンロード・動画再生・初期化オーケストレーション |
+
+**グローバル状態変数**（`renderer.js` で `let` 宣言）:
+- `trimState` — `{ startTime, endTime, duration, isLooping }`。`updateTrimDisplay()` を経由して UI 全体を更新。
+- `clipViewState` — メインタイムラインの表示範囲（波形のズームと同期）
+- `metadata` — メタデータフォームの現在値
+- `currentVideoFile` — 現在読み込み中の動画ファイル情報
+- `fineTuneSettings` — 微調整フレーム数設定
+- `availableCategories` — カテゴリ一覧
+
+**モジュール側で宣言する状態変数**:
+- `wavesurfer`, `waveformVisible` 等 → `waveform.js`
+- `shortcuts`, `editingShortcutId` 等 → `shortcuts.js`
+- `timelineClickMode`, `clipTimelineInitialized` 等 → `clip-timeline.js`
+- `commentDensityData`, `detectedHotspots` 等 → `comments.js`
+
+**スクリプト読み込み順**（index.html）:
+```
+CDN (WaveSurfer, simple-keyboard)
+→ utils.js → dom-elements.js → storage.js → file-name.js
+→ waveform.js → clip-timeline.js → comments.js → shortcuts.js → layout.js
+→ renderer.js
+```
 
 ### 状態の永続化（localStorage）
 
