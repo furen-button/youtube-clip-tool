@@ -96,6 +96,7 @@ ipcMain ハンドラー名はケバブケース（`download-video`、`get-commen
 - **新しい localStorage キーを追加するとき**は必ず `resetAllSettings()` のリセット対象にも追加する。
 - **新しい IPC を追加するとき**は preload.js のホワイトリストにも追加する（忘れるとレンダラーから呼べない）。
 - **コミットメッセージ**は Conventional Commits 風（`feat(scope): ...`、`fix(scope): ...`）を踏襲する。
+- 単一責任の原則を守る。
 
 ## タスクドキュメント
 

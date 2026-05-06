@@ -12,6 +12,7 @@ YouTubeのクリップ機能に近い体験を提供するGUIを、既存の編�
 | 02 サムネイルプレビュー | `02-clip-thumbnail-preview.md` | 🟡 中 | タスク01 |
 | 03 クリップパネルUI | `03-clip-panel-ui.md` | 🔴 高 | タスク01 |
 | 04 レイアウト統合・リファクタリング | `04-layout-refactor.md` | 🔴 高 | タスク01, 03 |
+| 05 renderer.js を単一責任で分割 | `05-renderer-split.md` | 🟡 中 | なし |
 
 ## 推奨実装順
 
