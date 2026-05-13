@@ -63,6 +63,7 @@ const categoryButtons = document.getElementById('categoryButtons');
 const selectedCategoriesDiv = document.getElementById('selectedCategories');
 const generateFileNameBtn = document.getElementById('generateFileNameBtn');
 const generateRubyBtn = document.getElementById('generateRubyBtn');
+const transcribeSerifBtn = document.getElementById('transcribeSerifBtn');
 const saveMetadataBtn = document.getElementById('saveMetadataBtn');
 const clearMetadataBtn = document.getElementById('clearMetadataBtn');
 const exportVideoBtn = document.getElementById('exportVideoBtn');

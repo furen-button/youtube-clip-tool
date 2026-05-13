@@ -229,6 +229,51 @@ generateRubyBtn.addEventListener('click', () => {
   showToast('ルビを自動生成しました', 'success');
 });
 
+// クリップ範囲の音声認識でセリフ＋ルビを自動入力
+transcribeSerifBtn.addEventListener('click', async () => {
+  if (!currentVideoFile || !currentVideoFile.path) {
+    showToast('動画を読み込んでください', 'warning');
+    return;
+  }
+  if (!videoPlayer.duration) {
+    showToast('動画を読み込んでください', 'warning');
+    return;
+  }
+  if (trimState.endTime <= trimState.startTime) {
+    showToast('トリミング範囲を設定してください', 'warning');
+    return;
+  }
+
+  const prevDisabled = transcribeSerifBtn.disabled;
+  const prevLabel = transcribeSerifBtn.textContent;
+  transcribeSerifBtn.disabled = true;
+  transcribeSerifBtn.textContent = '⏳';
+  try {
+    const text = await window.electronAPI.transcribeClip(
+      currentVideoFile.path,
+      trimState.startTime,
+      trimState.endTime
+    );
+    const cleaned = (text || '').trim();
+    if (!cleaned) {
+      showToast('音声認識結果が空でした', 'warning');
+      return;
+    }
+    serifInput.value = cleaned;
+    metadata.serif = cleaned;
+    const ruby = katakanaToHiragana(cleaned);
+    rubyInput.value = ruby;
+    metadata.ruby = ruby;
+    showToast('セリフとルビを生成しました', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast(`音声認識に失敗: ${err.message || err}`, 'error');
+  } finally {
+    transcribeSerifBtn.disabled = prevDisabled;
+    transcribeSerifBtn.textContent = prevLabel;
+  }
+});
+
 // メタデータの保存（JSON）
 saveMetadataBtn.addEventListener('click', async () => {
   metadata.videoId = videoIdInput.value.trim();

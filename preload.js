@@ -79,5 +79,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 波形Peaksデータを生成（長時間動画のOOMクラッシュ対策）
   generateWaveformPeaks: (videoPath, pixelsPerSecond = 20) =>
-    ipcRenderer.invoke('generate-waveform-peaks', videoPath, pixelsPerSecond)
+    ipcRenderer.invoke('generate-waveform-peaks', videoPath, pixelsPerSecond),
+
+  // クリップ範囲の音声を whisper.cpp で文字起こし
+  transcribeClip: (videoPath, startTime, endTime) =>
+    ipcRenderer.invoke('transcribe-clip', videoPath, startTime, endTime)
 });

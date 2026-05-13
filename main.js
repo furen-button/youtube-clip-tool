@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawn } = require('child_process');
 const YouTubeDownloader = require('./src/youtube-downloader');
 const { isAllowedYouTubeUrl, VIDEO_ID_RE } = require('./src/youtube-downloader');
@@ -337,6 +338,83 @@ ipcMain.handle('export-video', async (event, url, outputFileName, startTime, end
     });
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// クリップ範囲の音声を whisper.cpp で文字起こし
+// 1) ffmpeg で指定範囲を 16kHz mono WAV に抽出
+// 2) whisper-cli で文字起こし → 生成された .txt を読み取り
+// 3) finally で WAV/TXT を必ず削除
+ipcMain.handle('transcribe-clip', async (event, videoPath, startTime, endTime) => {
+  const whisperCli = process.env.WHISPER_CLI || 'whisper-cli';
+  const modelPath = process.env.WHISPER_MODEL_PATH;
+  const language = process.env.WHISPER_LANGUAGE || 'ja';
+
+  if (!modelPath) {
+    throw new Error('WHISPER_MODEL_PATH が設定されていません（.env を確認してください）');
+  }
+  if (!fs.existsSync(modelPath)) {
+    throw new Error(`whisper モデルが見つかりません: ${modelPath}`);
+  }
+  if (!videoPath || !fs.existsSync(videoPath)) {
+    throw new Error('動画ファイルが見つかりません');
+  }
+  const startSec = Number(startTime);
+  const endSec = Number(endTime);
+  if (!isFinite(startSec) || !isFinite(endSec) || endSec <= startSec) {
+    throw new Error('トリミング範囲が不正です');
+  }
+
+  const prefix = path.join(os.tmpdir(), `yct-stt-${Date.now()}-${process.pid}`);
+  const wavPath = `${prefix}.wav`;
+  const txtPath = `${prefix}.txt`;
+
+  try {
+    // 1) ffmpeg で範囲抽出（16kHz mono PCM s16le WAV、whisper.cpp が確実に読める形式）
+    await new Promise((resolve, reject) => {
+      const ff = spawn('ffmpeg', [
+        '-y',
+        '-ss', String(startSec),
+        '-to', String(endSec),
+        '-i', videoPath,
+        '-vn',
+        '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
+        wavPath
+      ]);
+      let stderr = '';
+      ff.stderr.on('data', (d) => { stderr += d.toString(); });
+      ff.on('error', (err) => reject(new Error(`ffmpeg 起動エラー: ${err.message}`)));
+      ff.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg 終了コード ${code}: ${stderr.slice(-300)}`));
+      });
+    });
+
+    // 2) whisper-cli を実行（入力は -f で明示。--no-prints は新しめのフラグなので付けない）
+    await new Promise((resolve, reject) => {
+      const wp = spawn(whisperCli, [
+        '-m', modelPath,
+        '-l', language,
+        '-otxt',
+        '-of', prefix,
+        '-nt',
+        '-f', wavPath
+      ]);
+      let stderr = '';
+      wp.stderr.on('data', (d) => { stderr += d.toString(); });
+      wp.on('error', (err) => reject(new Error(`whisper 起動エラー: ${err.message}（PATH を確認）`)));
+      wp.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`whisper 終了コード ${code}: ${stderr.slice(-300)}`));
+      });
+    });
+
+    // 3) 出力 txt を読む
+    const text = await fs.promises.readFile(txtPath, 'utf8');
+    return text.trim();
+  } finally {
+    fs.promises.unlink(wavPath).catch(() => {});
+    fs.promises.unlink(txtPath).catch(() => {});
   }
 });
 

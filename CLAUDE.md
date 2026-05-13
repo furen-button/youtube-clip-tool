@@ -21,6 +21,7 @@ npm start          # Electron アプリを起動（electron .）
 
 - `yt-dlp` — 動画／メタデータ／ライブチャットの取得
 - `ffmpeg` — `export-video` IPC でのトリミング書き出し（`-c copy` で再エンコードなし）
+- `whisper-cli`（任意） — セリフ欄の 🎤 ボタンによる音声認識（`transcribe-clip` IPC）。GGML モデルファイルを別途用意し、`.env` の `WHISPER_MODEL_PATH` に絶対パスを設定する。バイナリ名は `WHISPER_CLI`、言語は `WHISPER_LANGUAGE` で上書き可能。
 
 `.env` ファイルに `YOUTUBE_API_KEY` を設定する（`.env.example` 参照）。未設定の場合、検索は yt-dlp にフォールバックする（[src/youtube-downloader.js](src/youtube-downloader.js) の `searchVideos` 内 catch を参照）。
 
