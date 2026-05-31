@@ -3,5 +3,11 @@
         {
             "file": ".github/commit-instructions.md"
         }
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "/^node --check .*$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }
