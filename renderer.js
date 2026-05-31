@@ -476,7 +476,16 @@ async function startDownloadWithFormat(url, formatId) {
     const result = await window.electronAPI.downloadVideo(url, options);
 
     if (result.success) {
-      showStatus(`ダウンロードが完了しました: ${result.data.filePath}`, 'success');
+      const filePath = result.data && typeof result.data.filePath === 'string'
+        ? result.data.filePath
+        : '';
+      const hasTemplateLiteralPath = /%\([^)]+\)s/.test(filePath);
+
+      if (!filePath || hasTemplateLiteralPath) {
+        showStatus('ダウンロードは完了しましたが保存先の特定に失敗しました', 'warning');
+      } else {
+        showStatus(`ダウンロードが完了しました: ${filePath}`, 'success');
+      }
       progressBar.style.width = '100%';
       progressText.textContent = '100%';
 

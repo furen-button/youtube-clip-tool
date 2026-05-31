@@ -257,37 +257,103 @@ class YouTubeDownloader {
       onProgress = null
     } = options;
 
+    if (!isAllowedYouTubeUrl(url)) {
+      throw new Error('ダウンロードに失敗しました: 不正なURLです');
+    }
+
     return new Promise(async (resolve, reject) => {
       const outputPath = path.join(this.downloadDir, outputTemplate);
-      const command = `yt-dlp -f "${format}" -o "${outputPath}" --no-playlist "${url}"`;
+      const beforeFiles = new Set(fs.readdirSync(this.downloadDir));
+      const args = [
+        '-f', format,
+        '-o', outputPath,
+        '--no-playlist',
+        '--print', 'after_move:filepath',
+        url
+      ];
 
-      const child = exec(command);
+      const child = spawn('yt-dlp', args);
 
       let downloadedFile = null;
+
+      const isVideoFile = (filePath) => {
+        const ext = path.extname(filePath).toLowerCase();
+        return ['.mp4', '.webm', '.mkv', '.avi', '.mov'].includes(ext);
+      };
+
+      const pickLatest = (paths) => {
+        const existing = paths.filter((p) => {
+          try {
+            return fs.existsSync(p) && fs.statSync(p).isFile();
+          } catch (_) {
+            return false;
+          }
+        });
+        if (existing.length === 0) return null;
+        existing.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+        return existing[0];
+      };
+
+      const resolveDownloadedFilePath = (videoId) => {
+        if (downloadedFile && fs.existsSync(downloadedFile) && isVideoFile(downloadedFile)) {
+          return downloadedFile;
+        }
+
+        const afterFiles = fs.readdirSync(this.downloadDir);
+        const addedCandidates = afterFiles
+          .filter((name) => !beforeFiles.has(name))
+          .map((name) => path.join(this.downloadDir, name))
+          .filter((p) => isVideoFile(p));
+
+        const addedLatest = pickLatest(addedCandidates);
+        if (addedLatest) return addedLatest;
+
+        if (videoId) {
+          const idCandidates = afterFiles
+            .filter((name) => name.includes(videoId))
+            .map((name) => path.join(this.downloadDir, name))
+            .filter((p) => isVideoFile(p));
+          const idLatest = pickLatest(idCandidates);
+          if (idLatest) return idLatest;
+        }
+
+        return null;
+      };
+
+      const parseOutputLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        const progressMatch = trimmed.match(/(\d+\.?\d*)%/);
+        if (progressMatch && onProgress) {
+          onProgress({
+            percentage: parseFloat(progressMatch[1]),
+            output: trimmed
+          });
+        }
+
+        const fileMatch = trimmed.match(/\[download\] Destination: (.+)/);
+        if (fileMatch) {
+          downloadedFile = fileMatch[1].trim();
+          return;
+        }
+
+        const mergeMatch = trimmed.match(/\[Merger\] Merging formats into "(.+)"/);
+        if (mergeMatch) {
+          downloadedFile = mergeMatch[1].trim();
+          return;
+        }
+
+        // --print after_move:filepath で出る最終保存先を拾う
+        if (trimmed.startsWith(this.downloadDir) && fs.existsSync(trimmed) && isVideoFile(trimmed)) {
+          downloadedFile = trimmed;
+        }
+      };
 
       child.stdout.on('data', (data) => {
         const output = data.toString();
         console.log(output);
-
-        // ダウンロード進捗をパース
-        const progressMatch = output.match(/(\d+\.?\d*)%/);
-        if (progressMatch && onProgress) {
-          onProgress({
-            percentage: parseFloat(progressMatch[1]),
-            output: output
-          });
-        }
-
-        // ダウンロード完了ファイル名を取得
-        const fileMatch = output.match(/\[download\] Destination: (.+)/);
-        if (fileMatch) {
-          downloadedFile = fileMatch[1].trim();
-        }
-
-        const mergeMatch = output.match(/\[Merger\] Merging formats into "(.+)"/);
-        if (mergeMatch) {
-          downloadedFile = mergeMatch[1].trim();
-        }
+        output.split(/\r?\n/).forEach(parseOutputLine);
       });
 
       child.stderr.on('data', (data) => {
@@ -299,7 +365,12 @@ class YouTubeDownloader {
           // ダウンロード成功後、動画情報を取得してメタデータとして保存
           try {
             const videoInfo = await this.getVideoInfo(url);
-            const videoFileName = path.basename(downloadedFile || outputPath);
+            const resolvedPath = resolveDownloadedFilePath(videoInfo.id);
+            if (!resolvedPath) {
+              throw new Error('保存先ファイルを特定できませんでした');
+            }
+
+            const videoFileName = path.basename(resolvedPath);
             const metadataFileName = videoFileName.replace(/\.[^.]+$/, '.json');
             const metadataPath = path.join(this.downloadDir, metadataFileName);
             
@@ -313,20 +384,20 @@ class YouTubeDownloader {
               viewCount: videoInfo.viewCount,
               url: url,
               downloadedAt: new Date().toISOString(),
-              filePath: downloadedFile || outputPath
+              filePath: resolvedPath
             };
             
             fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
             console.log('メタデータを保存しました:', metadataPath);
+
+            resolve({
+              success: true,
+              filePath: resolvedPath,
+              message: 'ダウンロードが完了しました'
+            });
           } catch (error) {
-            console.error('メタデータの保存に失敗しました:', error.message);
+            reject(new Error(`ダウンロード後処理に失敗しました: ${error.message}`));
           }
-          
-          resolve({
-            success: true,
-            filePath: downloadedFile || outputPath,
-            message: 'ダウンロードが完了しました'
-          });
         } else {
           reject(new Error(`ダウンロードに失敗しました (exit code: ${code})`));
         }
