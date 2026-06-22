@@ -1875,13 +1875,20 @@ section h2 {
 .input-with-button {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
 }
 
 .input-with-button .form-input {
   flex: 1;
   min-width: 200px;
+}
+
+/* セリフ欄は複数行入力できるよう大きめのテキストエリアにする */
+textarea.form-input--serif {
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
 }
 
 /* datalistはレイアウトに影響しないようにする */
