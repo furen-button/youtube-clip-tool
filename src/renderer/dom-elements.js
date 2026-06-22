@@ -57,6 +57,7 @@ const videoIdInput = document.getElementById('videoId');
 const fileNameInput = document.getElementById('fileName');
 const serifInput = document.getElementById('serif');
 const rubyInput = document.getElementById('ruby');
+const rubyBackdrop = document.getElementById('rubyBackdrop');
 const clipUrlInput = document.getElementById('clipUrl');
 const memoInput = document.getElementById('memo');
 const categoryButtons = document.getElementById('categoryButtons');

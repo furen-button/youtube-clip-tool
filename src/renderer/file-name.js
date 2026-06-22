@@ -213,6 +213,28 @@ generateFileNameBtn.addEventListener('click', () => {
   autoGenerateFileName();
 });
 
+// ルビ欄でひらがな以外の文字を背面レイヤーでハイライトする
+// 許可: ひらがな（U+3041–U+3096）・繰り返し記号（ゝゞ）・長音符（ー）・英数字・空白
+const RUBY_ALLOWED_CHAR = /[ぁ-ゖゝゞーA-Za-z0-9\s]/;
+
+function updateRubyHighlight() {
+  if (!rubyBackdrop) return;
+  let html = '';
+  // for...of でサロゲートペアを1文字として扱う
+  for (const ch of rubyInput.value) {
+    const esc = escapeHtml(ch);
+    html += RUBY_ALLOWED_CHAR.test(ch) ? esc : `<span class="non-hiragana">${esc}</span>`;
+  }
+  rubyBackdrop.innerHTML = html;
+  // 横スクロール位置を入力欄に追従させる
+  rubyBackdrop.scrollLeft = rubyInput.scrollLeft;
+}
+
+// 入力欄の横スクロールに背面レイヤーを同期
+rubyInput.addEventListener('scroll', () => {
+  if (rubyBackdrop) rubyBackdrop.scrollLeft = rubyInput.scrollLeft;
+});
+
 // ルビの自動生成（カタカナ→ひらがな変換）
 generateRubyBtn.addEventListener('click', () => {
   const serif = serifInput.value.trim();
@@ -225,6 +247,7 @@ generateRubyBtn.addEventListener('click', () => {
   const ruby = katakanaToHiragana(serif);
   rubyInput.value = ruby;
   metadata.ruby = ruby;
+  updateRubyHighlight();
 
   showToast('ルビを自動生成しました', 'success');
 });
@@ -264,6 +287,7 @@ transcribeSerifBtn.addEventListener('click', async () => {
     const ruby = katakanaToHiragana(cleaned);
     rubyInput.value = ruby;
     metadata.ruby = ruby;
+    updateRubyHighlight();
     showToast('セリフとルビを生成しました', 'success');
   } catch (err) {
     console.error(err);
@@ -393,6 +417,7 @@ clearMetadataBtn.addEventListener('click', () => {
   rubyInput.value = '';
   clipUrlInput.value = '';
   memoInput.value = '';
+  updateRubyHighlight();
 
   metadata.categories = [];
   categoryButtons.querySelectorAll('.btn-category').forEach(btn => {
@@ -424,7 +449,10 @@ serifInput.addEventListener('input', (e) => {
   metadata.serif = e.target.value.trim();
   autoGenerateFileName();
 });
-rubyInput.addEventListener('input', (e) => metadata.ruby = e.target.value.trim());
+rubyInput.addEventListener('input', (e) => {
+  metadata.ruby = e.target.value.trim();
+  updateRubyHighlight();
+});
 clipUrlInput.addEventListener('input', (e) => metadata.clipUrl = e.target.value.trim());
 memoInput.addEventListener('input', (e) => metadata.memo = e.target.value.trim());
 

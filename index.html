@@ -359,7 +359,11 @@
 
             <div class="form-group">
               <label for="ruby">セリフルビ (Ruby)</label>
-              <input type="text" id="ruby" class="form-input" placeholder="ひらがなで入力" autocomplete="off">
+              <div class="ruby-field">
+                <div class="ruby-field__backdrop" id="rubyBackdrop" aria-hidden="true"></div>
+                <input type="text" id="ruby" class="form-input" placeholder="ひらがなで入力" autocomplete="off">
+              </div>
+              <p class="form-hint">ひらがな以外の文字は<span class="non-hiragana">ハイライト</span>されます</p>
             </div>
 
             <div class="form-group">
