@@ -25,6 +25,8 @@ const defaultShortcuts = {
   endPlusSmall:    { key: 'KeyD',         ctrl: false, shift: false, alt: false, action: '終了+小フレーム', description: 'トリミング終了位置を小フレーム数後に移動' },
   endPlusLarge:    { key: 'KeyF',         ctrl: false, shift: false, alt: false, action: '終了+大フレーム', description: 'トリミング終了位置を大フレーム数後に移動' },
   zoomCycle:       { key: 'KeyX',         ctrl: false, shift: false, alt: false, action: 'ズーム倍率切り替え', description: 'トリミング範囲のパディング（5秒/1分/5分）を切り替え' },
+  hotspotPrev:     { key: 'Comma',        ctrl: false, shift: false, alt: false, action: '前の盛り上がりへ',   description: '現在位置より前の盛り上がりへ再生位置を移動（密度ON時）' },
+  hotspotNext:     { key: 'Period',       ctrl: false, shift: false, alt: false, action: '次の盛り上がりへ',   description: '現在位置より後の盛り上がりへ再生位置を移動（密度ON時）' },
   saveMetadata:    { key: 'KeyS',         ctrl: true,  shift: false, alt: false, action: 'メタデータ保存',  description: 'メタデータをJSON形式で保存' },
   exportVideo:     { key: 'KeyE',         ctrl: true,  shift: false, alt: false, action: '動画エクスポート', description: 'トリミング済み動画をMP4形式で書き出し' },
   openSettings:    { key: 'KeyK',         ctrl: false, shift: false, alt: false, action: 'ショートカット設定', description: 'このショートカット設定画面を開く' },
@@ -48,6 +50,8 @@ const keyCodeToKeyName = {
   'ArrowDown': '↓',
   'BracketLeft': '[',
   'BracketRight': ']',
+  'Comma': ',',
+  'Period': '.',
   'Enter': 'Enter',
   'Escape': 'Esc',
   'Backspace': 'Backspace',
@@ -87,6 +91,7 @@ function saveShortcutsToStorage() {
   try {
     localStorage.setItem('keyboardShortcuts', JSON.stringify(shortcuts));
     updateFineTuneButtonLabels();
+    renderShortcutLegend();
     showToast('ショートカット設定を保存しました', 'success');
   } catch (error) {
     console.error('ショートカット設定の保存に失敗:', error);
@@ -101,6 +106,7 @@ function resetShortcuts() {
   shortcuts = { ...defaultShortcuts };
   saveShortcutsToStorage();
   renderShortcutList();
+  renderShortcutLegend();
   updateFineTuneButtonLabels();
   showToast('ショートカット設定をデフォルトに戻しました', 'success');
 }
@@ -274,6 +280,8 @@ function executeShortcutAction(actionId, videoLoaded) {
       showToast(`ループ再生を${trimState.isLooping ? 'オン' : 'オフ'}にしました`, 'info');
       break;
     case 'zoomCycle':          if (!videoLoaded) return; cycleZoomPadding(); break;
+    case 'hotspotPrev':        if (!videoLoaded) return; jumpToAdjacentHotspot(-1); break;
+    case 'hotspotNext':        if (!videoLoaded) return; jumpToAdjacentHotspot(1);  break;
     case 'startMinusLarge':    if (!videoLoaded) return; adjustStartTime(-fineTuneSettings.largeFrames); break;
     case 'startMinusSmall':    if (!videoLoaded) return; adjustStartTime(-fineTuneSettings.smallFrames); break;
     case 'startPlusSmall':     if (!videoLoaded) return; adjustStartTime(fineTuneSettings.smallFrames);  break;
@@ -407,6 +415,66 @@ document.addEventListener('keydown', (e) => {
     handleModalKeyDown(e);
   }
 }, true);
+
+// ============================================================
+// 常時参照できるショートカット凡例（編集画面に ? で開閉表示）
+// ============================================================
+
+// 凡例のカテゴリ分け（現在の shortcuts からライブ生成し、リマップを反映）
+const SHORTCUT_LEGEND_GROUPS = [
+  { title: '再生・移動', ids: ['playPause', 'frameBack1', 'frameForward1', 'frameBack15', 'frameForward15', 'zoomCycle'] },
+  { title: '探索', ids: ['hotspotPrev', 'hotspotNext'] },
+  { title: 'トリミング', ids: ['setStart', 'setEnd', 'toggleLoop', 'startMinusLarge', 'startMinusSmall', 'startPlusSmall', 'startPlusLarge', 'endMinusLarge', 'endMinusSmall', 'endPlusSmall', 'endPlusLarge'] },
+  { title: '保存・その他', ids: ['saveMetadata', 'exportVideo', 'openSettings'] },
+];
+
+function renderShortcutLegend() {
+  const el = document.getElementById('shortcutLegend');
+  if (!el) return;
+
+  el.innerHTML = SHORTCUT_LEGEND_GROUPS.map(group => {
+    const rows = group.ids
+      .filter(id => shortcuts[id])
+      .map(id => `
+        <div class="shortcut-legend__row">
+          <kbd class="shortcut-legend__key">${escapeHtml(getShortcutString(shortcuts[id]))}</kbd>
+          <span class="shortcut-legend__action">${escapeHtml(shortcuts[id].action)}</span>
+        </div>`)
+      .join('');
+    return `<div class="shortcut-legend__group">
+      <div class="shortcut-legend__title">${escapeHtml(group.title)}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function loadShortcutLegendOpen() {
+  try { return localStorage.getItem('shortcutLegendOpen') === '1'; } catch (e) { return false; }
+}
+
+function setShortcutLegendOpen(open) {
+  const panel = document.getElementById('shortcutLegend');
+  const btn = document.getElementById('shortcutLegendToggle');
+  if (panel) panel.hidden = !open;
+  if (btn) {
+    btn.classList.toggle('active', open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  try { localStorage.setItem('shortcutLegendOpen', open ? '1' : '0'); } catch (e) {}
+  if (open) renderShortcutLegend();
+}
+
+// 起動時に凡例の開閉状態を復元する（renderer.js の起動処理から loadShortcuts() の後に呼ぶ）
+function initShortcutLegend() {
+  const btn = document.getElementById('shortcutLegendToggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById('shortcutLegend');
+      setShortcutLegendOpen(panel ? panel.hidden : true);
+    });
+  }
+  setShortcutLegendOpen(loadShortcutLegendOpen());
+}
 
 // グローバルキーボードイベント
 document.addEventListener('keydown', handleGlobalKeyDown);

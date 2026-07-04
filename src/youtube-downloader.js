@@ -245,6 +245,162 @@ class YouTubeDownloader {
   }
 
   /**
+   * チャンネル指定（URL / @ハンドル / channelId / 名前）を channelId に解決する。
+   * YouTube Data API v3 を使用（APIキー必須）。
+   * @param {string} input
+   * @returns {Promise<{channelId:string, title:string, thumbnail:string}>}
+   */
+  async resolveChannel(input) {
+    const raw = String(input || '').trim();
+    if (!raw) throw new Error('チャンネル指定が空です');
+
+    let channelId = null;
+    let handle = null;
+    let username = null;
+    let queryName = null;
+
+    if (/^https?:\/\//i.test(raw)) {
+      // URL からパス種別を判定
+      let u;
+      try { u = new URL(raw); } catch (_) { throw new Error('不正なURLです'); }
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (parts[0] === 'channel' && parts[1]) channelId = parts[1];
+      else if (parts[0] && parts[0].startsWith('@')) handle = parts[0];
+      else if (parts[0] === 'user' && parts[1]) username = parts[1];
+      else if ((parts[0] === 'c' || parts[0] === 'user') && parts[1]) queryName = decodeURIComponent(parts[1]);
+      else if (parts[0]) queryName = decodeURIComponent(parts[0]);
+    } else if (raw.startsWith('@')) {
+      handle = raw;
+    } else if (/^UC[\w-]{22}$/.test(raw)) {
+      channelId = raw;
+    } else {
+      queryName = raw;
+    }
+
+    try {
+      if (!channelId && handle) {
+        const r = await youtube.channels.list({ part: 'snippet', forHandle: handle });
+        if (r.data.items && r.data.items.length) channelId = r.data.items[0].id;
+      }
+      if (!channelId && username) {
+        const r = await youtube.channels.list({ part: 'snippet', forUsername: username });
+        if (r.data.items && r.data.items.length) channelId = r.data.items[0].id;
+      }
+      if (!channelId) {
+        // ハンドル/ユーザー名で解決できなければ検索にフォールバック
+        const q = queryName || handle || username;
+        if (q) {
+          const s = await youtube.search.list({ part: 'snippet', type: 'channel', q, maxResults: 1 });
+          if (s.data.items && s.data.items.length) {
+            channelId = s.data.items[0].id.channelId || (s.data.items[0].snippet && s.data.items[0].snippet.channelId);
+          }
+        }
+      }
+
+      if (!channelId) throw new Error('チャンネルが見つかりませんでした');
+
+      const c = await youtube.channels.list({ part: 'snippet', id: channelId });
+      const item = c.data.items && c.data.items[0];
+      if (!item) throw new Error('チャンネル情報を取得できませんでした');
+
+      const thumbs = item.snippet.thumbnails || {};
+      return {
+        channelId,
+        title: item.snippet.title,
+        thumbnail: (thumbs.medium || thumbs.default || {}).url || ''
+      };
+    } catch (error) {
+      if (error.code === 403 || (error.message || '').includes('API key')) {
+        throw new Error('YouTube APIが利用できません（APIキーを確認してください）');
+      }
+      throw new Error(`チャンネルの解決に失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
+   * 指定チャンネルの、指定した年月に公開された動画を取得する。
+   * search.list を publishedAfter/publishedBefore（当月〜翌月初, UTC）で絞り込む。
+   * 並び替えはクライアント側で行うため、ここでは日付降順で取得して詳細を付与して返す。
+   * @param {string} channelId
+   * @param {number} year
+   * @param {number} month 1-12
+   * @returns {Promise<{videos:Array, truncated:boolean}>}
+   */
+  async getChannelVideos(channelId, year, month) {
+    if (!/^UC[\w-]{22}$/.test(String(channelId || ''))) {
+      throw new Error('不正なchannelIdです');
+    }
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    if (!(y >= 2005 && y <= 2100) || !(m >= 1 && m <= 12)) {
+      throw new Error('年月の指定が不正です');
+    }
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const publishedAfter = `${y}-${pad(m)}-01T00:00:00Z`;
+    const nextY = m === 12 ? y + 1 : y;
+    const nextM = m === 12 ? 1 : m + 1;
+    const publishedBefore = `${nextY}-${pad(nextM)}-01T00:00:00Z`;
+
+    try {
+      const ids = [];
+      let pageToken;
+      let pages = 0;
+      const MAX_PAGES = 5; // 暴走防止（最大250件/月）
+      do {
+        const resp = await youtube.search.list({
+          part: 'id',
+          channelId,
+          type: 'video',
+          order: 'date',
+          maxResults: 50,
+          publishedAfter,
+          publishedBefore,
+          pageToken
+        });
+        (resp.data.items || []).forEach((it) => {
+          if (it.id && it.id.videoId) ids.push(it.id.videoId);
+        });
+        pageToken = resp.data.nextPageToken;
+        pages++;
+      } while (pageToken && pages < MAX_PAGES);
+
+      const truncated = !!pageToken; // MAX_PAGES に達してもまだ残っている
+
+      if (ids.length === 0) return { videos: [], truncated: false };
+
+      const videos = [];
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const d = await youtube.videos.list({
+          part: 'snippet,contentDetails,statistics',
+          id: chunk.join(',')
+        });
+        (d.data.items || []).forEach((v) => {
+          const thumbs = v.snippet.thumbnails || {};
+          videos.push({
+            id: v.id,
+            title: v.snippet.title,
+            url: `https://www.youtube.com/watch?v=${v.id}`,
+            thumbnail: (thumbs.high || thumbs.medium || thumbs.default || {}).url || '',
+            duration: this.parseDuration(v.contentDetails.duration),
+            uploader: v.snippet.channelTitle,
+            viewCount: parseInt(v.statistics.viewCount) || 0,
+            publishedAt: v.snippet.publishedAt
+          });
+        });
+      }
+
+      return { videos, truncated };
+    } catch (error) {
+      if (error.code === 403 || (error.message || '').includes('API key')) {
+        throw new Error('YouTube APIが利用できません（APIキー/クォータを確認してください）');
+      }
+      throw new Error(`チャンネル動画の取得に失敗しました: ${error.message}`);
+    }
+  }
+
+  /**
    * YouTube動画をダウンロード
    * @param {string} url - YouTube動画のURL
    * @param {Object} options - ダウンロードオプション

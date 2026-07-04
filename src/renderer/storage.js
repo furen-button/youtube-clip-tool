@@ -217,3 +217,55 @@ const TextPresets = {
     });
   },
 };
+
+/**
+ * お気に入りチャンネル管理
+ * 登録チャンネル（{channelId, title, thumbnail}）を localStorage に保存する。
+ */
+const FavoriteChannels = {
+  STORAGE_KEY: 'favoriteChannels',
+
+  load() {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      console.error('お気に入りチャンネルの読み込みエラー:', e);
+      return [];
+    }
+  },
+
+  save(list) {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error('お気に入りチャンネルの保存エラー:', e);
+    }
+  },
+
+  has(channelId) {
+    return this.load().some(c => c.channelId === channelId);
+  },
+
+  /** 追加（既存なら情報を更新）。追加後の一覧を返す */
+  add(channel) {
+    if (!channel || !channel.channelId) return this.load();
+    const list = this.load().filter(c => c.channelId !== channel.channelId);
+    list.push({
+      channelId: channel.channelId,
+      title: channel.title || channel.channelId,
+      thumbnail: channel.thumbnail || ''
+    });
+    list.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ja'));
+    this.save(list);
+    return list;
+  },
+
+  /** 削除。削除後の一覧を返す */
+  remove(channelId) {
+    const list = this.load().filter(c => c.channelId !== channelId);
+    this.save(list);
+    return list;
+  },
+};

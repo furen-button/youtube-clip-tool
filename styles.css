@@ -435,6 +435,186 @@ section h2 {
   margin-bottom: 12px;
 }
 
+/* ===== チャンネルから探す ===== */
+.channel-add {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.favorite-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  min-height: 24px;
+}
+
+.favorite-channels:empty::before {
+  content: attr(data-empty);
+  color: #a0aec0;
+  font-size: 0.85rem;
+}
+
+.favorite-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+  background: #edf2f7;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  max-width: 260px;
+}
+
+.favorite-channel:hover {
+  background: #e2e8f0;
+}
+
+.favorite-channel.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: #fff;
+}
+
+.favorite-channel__thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.favorite-channel__name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.favorite-channel__remove {
+  border: none;
+  background: rgba(0, 0, 0, 0.12);
+  color: inherit;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.favorite-channel__remove:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.channel-browser {
+  padding: 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.channel-browser__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.channel-browser__thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.channel-browser__title {
+  font-weight: 700;
+  color: #2d3748;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-browser__sort-label {
+  font-size: 0.8rem;
+  color: #718096;
+  white-space: nowrap;
+}
+
+.channel-sort {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* 年月ピッカー */
+.month-picker {
+  margin-bottom: 12px;
+}
+
+.month-picker__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.month-picker__year {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+  min-width: 64px;
+  text-align: center;
+}
+
+.month-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.month-picker__month {
+  padding: 8px 0;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.month-picker__month:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.month-picker__month.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: #fff;
+  font-weight: 700;
+}
+
+.channel-results__count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #718096;
+  margin-bottom: 8px;
+}
+
 /* 最近の検索履歴 */
 .search-history {
   display: flex;
@@ -927,6 +1107,13 @@ section h2 {
   min-width: 36px;
 }
 
+/* 盛り上がりの前後ジャンプボタン */
+.hotspot-nav {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .hotspot-count {
   font-size: 0.8rem;
   color: #718096;
@@ -1377,6 +1564,37 @@ section h2 {
   top: 0;
 }
 
+/* 盛り上がりマーカー（動画全長のミニマップ上に配置。マーカーだけクリック可能） */
+.clip-overview__hotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.clip-overview__hotspot {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 1px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.clip-overview__hotspot.is-hot {
+  background: rgba(245, 101, 101, 0.9);
+}
+
+.clip-overview__hotspot.is-warm {
+  background: rgba(246, 173, 85, 0.85);
+}
+
+.clip-overview__hotspot:hover {
+  filter: brightness(1.3);
+}
+
 .clip-overview__labels {
   display: flex;
   justify-content: space-between;
@@ -1416,6 +1634,39 @@ section h2 {
   border-bottom: 2px solid #fff;
   pointer-events: none;
   transition: none;
+}
+
+/* 盛り上がりマーカー（メインタイムライン。表示範囲に追従。マーカーだけクリック可能） */
+.clip-timeline__hotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.clip-timeline__hotspot {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 2px;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+.clip-timeline__hotspot.is-hot {
+  background: rgba(245, 101, 101, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(245, 101, 101, 0.55);
+}
+
+.clip-timeline__hotspot.is-warm {
+  background: rgba(246, 173, 85, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(246, 173, 85, 0.5);
+}
+
+.clip-timeline__hotspot:hover {
+  filter: brightness(1.4);
 }
 
 .clip-timeline__handle {
@@ -1560,6 +1811,72 @@ section h2 {
   color: #4a5568;
   margin: 0 6px;
   white-space: nowrap;
+}
+
+/* 現在のクリック動作ヒント（常時表示） */
+.click-mode-hint {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  color: #718096;
+  padding: 0 2px;
+}
+
+/* ? トグルの押下状態 */
+.btn-icon-sm.active {
+  background: #667eea;
+  color: #fff;
+  border-color: #667eea;
+}
+
+/* キーボードショートカット凡例（常時参照パネル） */
+.shortcut-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 16px;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+/* display:grid が UA の [hidden] を上書きしてしまうため、非表示を明示する */
+.shortcut-legend[hidden] {
+  display: none;
+}
+
+.shortcut-legend__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.shortcut-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.shortcut-legend__key {
+  flex-shrink: 0;
+  min-width: 58px;
+  text-align: center;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  color: #2d3748;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.shortcut-legend__action {
+  font-size: 0.78rem;
+  color: #4a5568;
 }
 
 .btn-mode {
@@ -1844,6 +2161,11 @@ section h2 {
   gap: 8px;
 }
 
+/* hidden 属性による非表示（.form-group の display:flex が UA の [hidden] を上書きしてしまうため明示） */
+.form-group[hidden] {
+  display: none;
+}
+
 .form-group label {
   font-size: 0.9rem;
   font-weight: 600;
@@ -2023,6 +2345,63 @@ textarea.form-input--serif {
 
 .category-tag .remove-btn:hover {
   opacity: 1;
+}
+
+/* 出力ファイル名プレビュー（読み取り専用） */
+.output-name-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.output-name-preview__label {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #718096;
+}
+
+.output-name-preview__value {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  color: #2d3748;
+  word-break: break-all;
+}
+
+/* 自動生成値の詳細（普段は折りたたみ） */
+.metadata-details {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #718096;
+}
+
+.metadata-details > summary {
+  cursor: pointer;
+  padding: 4px 2px;
+  user-select: none;
+}
+
+.metadata-details__row {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0 3px 14px;
+}
+
+.metadata-details__row > span {
+  flex-shrink: 0;
+  min-width: 68px;
+  color: #a0aec0;
+}
+
+.metadata-details__row > code {
+  font-family: 'SF Mono', Menlo, monospace;
+  color: #4a5568;
+  word-break: break-all;
 }
 
 .metadata-actions {

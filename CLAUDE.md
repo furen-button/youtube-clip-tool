@@ -42,7 +42,7 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 - **[main.js](main.js)**: すべての I/O（外部プロセス起動、ファイル読み書き、API 呼び出し）を担う。`ipcMain.handle(...)` でハンドラーを公開。
 - **[preload.js](preload.js)**: `contextBridge.exposeInMainWorld('electronAPI', ...)` で、レンダラーから呼べる API を限定列挙する。**新しい IPC を追加する場合は preload.js にもエントリを追加する必要がある**（追加し忘れるとレンダラーから呼べない）。
 - **[renderer.js](renderer.js)**: グローバル状態の宣言と、動画検索・ダウンロード・再生・カテゴリ管理・初期化・トリミング調整のオーケストレーター（約 750 行）。`require` は使用禁止（`contextIsolation: true`、`nodeIntegration: false`）。機能別ロジックは `src/renderer/` 以下に分割されている（下表参照）。
-- **[src/youtube-downloader.js](src/youtube-downloader.js)**: yt-dlp を使う `YouTubeDownloader` クラス。`searchVideos` は YouTube Data API v3 を優先し、未設定・失敗時は yt-dlp にフォールバックする。main.js が単一インスタンスを保持。
+- **[src/youtube-downloader.js](src/youtube-downloader.js)**: yt-dlp を使う `YouTubeDownloader` クラス。`searchVideos` は YouTube Data API v3 を優先し、未設定・失敗時は yt-dlp にフォールバックする。main.js が単一インスタンスを保持。チャンネル機能として `resolveChannel`（URL/@ハンドル/名前/channelId → channelId 解決）と `getChannelVideos`（指定年月に公開された動画を取得。`search.list` の `publishedAfter`/`publishedBefore` で月境界を指定）も提供する（Data API 前提）。
 - **[src/youtube-api.js](src/youtube-api.js)**: YouTube Data API v3 クライアント（`googleapis` ライブラリ + `dotenv`）。APIキーの取得と `youtube.search.list()` のラッパー。
 
 ### 出力ディレクトリの役割
@@ -71,6 +71,7 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 | [src/renderer/comments.js](src/renderer/comments.js) | コメント密度・盛り上がり検出・`HotspotTooltip` |
 | [src/renderer/shortcuts.js](src/renderer/shortcuts.js) | キーボードショートカット定義・編集モーダル・`handleGlobalKeyDown`・フレーム微調整 |
 | [src/renderer/layout.js](src/renderer/layout.js) | `ColumnResizer`（編集タブ 3 列幅リサイザ） |
+| [src/renderer/channels.js](src/renderer/channels.js) | 検索タブ「チャンネルから探す」（`FavoriteChannels` によるお気に入り登録・年月ピッカー・並び替え・動画カード描画） |
 | [renderer.js](renderer.js) | グローバル状態変数・カテゴリ管理・ダウンロード・動画再生・初期化オーケストレーション |
 
 **グローバル状態変数**（`renderer.js` で `let` 宣言）:
@@ -91,7 +92,7 @@ main.js (Node)  ←─── IPC ───→  preload.js  ──→  window.ele
 ```
 CDN (WaveSurfer, simple-keyboard)
 → utils.js → dom-elements.js → storage.js → file-name.js
-→ waveform.js → clip-timeline.js → comments.js → shortcuts.js → layout.js
+→ waveform.js → clip-timeline.js → comments.js → shortcuts.js → layout.js → channels.js
 → renderer.js
 ```
 
@@ -102,6 +103,7 @@ CDN (WaveSurfer, simple-keyboard)
 ```
 availableCategories          fineTuneSettings        keyboardShortcuts
 timelineClickMode            fileNameTemplate        editColumnWidths
+shortcutLegendOpen           favoriteChannels
 inputHistory_<key>           textPresets_<key>
 ```
 
