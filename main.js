@@ -67,6 +67,26 @@ ipcMain.handle('search-videos', async (event, query, maxResults) => {
   }
 });
 
+// チャンネル指定（URL/@ハンドル/channelId/名前）を channelId に解決
+ipcMain.handle('resolve-channel', async (event, input) => {
+  try {
+    const data = await downloader.resolveChannel(input);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// 指定チャンネルの指定年月に公開された動画一覧を取得
+ipcMain.handle('get-channel-videos', async (event, channelId, year, month) => {
+  try {
+    const data = await downloader.getChannelVideos(channelId, year, month);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // 動画情報を取得
 ipcMain.handle('get-video-info', async (event, url) => {
   try {

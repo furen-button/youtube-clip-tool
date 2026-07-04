@@ -5,9 +5,17 @@ const { contextBridge, ipcRenderer } = require('electron');
  */
 contextBridge.exposeInMainWorld('electronAPI', {
   // YouTube動画を検索
-  searchVideos: (query, maxResults = 10) => 
+  searchVideos: (query, maxResults = 10) =>
     ipcRenderer.invoke('search-videos', query, maxResults),
-  
+
+  // チャンネル指定を channelId に解決
+  resolveChannel: (input) =>
+    ipcRenderer.invoke('resolve-channel', input),
+
+  // 指定チャンネルの指定年月の動画一覧を取得
+  getChannelVideos: (channelId, year, month) =>
+    ipcRenderer.invoke('get-channel-videos', channelId, year, month),
+
   // 動画情報を取得
   getVideoInfo: (url) => 
     ipcRenderer.invoke('get-video-info', url),

@@ -981,6 +981,7 @@ function initialize() {
   document.getElementById('rangeFromCurrent30Btn').addEventListener('click', () => rangeFromCurrent(30));
 
   initQuickAddCategory();
+  initChannelBrowser();
 }
 
 function initQuickAddCategory() {
@@ -1131,6 +1132,7 @@ function resetAllSettings() {
     localStorage.removeItem('fineTuneSettings');
     localStorage.removeItem('timelineClickMode');
     localStorage.removeItem('shortcutLegendOpen');
+    localStorage.removeItem('favoriteChannels');
     localStorage.removeItem(FileNameTemplate.STORAGE_KEY);
     ColumnResizer.reset();
 
@@ -1157,6 +1159,10 @@ function resetAllSettings() {
     updateFineTuneButtonLabels();
 
     setTimelineClickMode('seek');
+
+    if (typeof selectedChannel !== 'undefined') selectedChannel = null;
+    if (channelBrowser) channelBrowser.style.display = 'none';
+    if (typeof renderFavoriteChannels === 'function') renderFavoriteChannels();
 
     initInputHistories();
     initTextPresets();
