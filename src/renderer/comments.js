@@ -29,6 +29,8 @@ function resetCommentStateForVideoSwitch() {
   if (hotspotSection) hotspotSection.style.display = 'none';
   if (hotspotList) hotspotList.innerHTML = '';
   if (hotspotCount) hotspotCount.textContent = '';
+  if (clipOverviewHotspots) clipOverviewHotspots.innerHTML = '';
+  if (clipTimelineHotspots) clipTimelineHotspots.innerHTML = '';
 
   liveChatComments = [];
   liveChatCommentsVideoId = null;
@@ -279,6 +281,8 @@ function detectAndShowHotspots() {
     detectedHotspots = [];
     hotspotList.innerHTML = '';
     hotspotCount.textContent = '';
+    renderOverviewHotspots();
+    renderTimelineHotspots();
     return;
   }
 
@@ -318,6 +322,9 @@ function detectAndShowHotspots() {
 
   hotspots.sort((a, b) => b.peakCount - a.peakCount);
   detectedHotspots = hotspots;
+
+  renderOverviewHotspots();
+  renderTimelineHotspots();
 
   hotspotCount.textContent = `${hotspots.length}箇所検出`;
 
@@ -483,6 +490,129 @@ function jumpToHotspot(startTime, endTime) {
 
   const center = (startTime + endTime) / 2;
   applyCenteredRange(center, 15, '盛り上がり箇所をループ範囲に設定');
+}
+
+/**
+ * 盛り上がりマーカーをオーバービュー（動画全長のミニマップ）に描画する。
+ * マーカーはクリックでその盛り上がりを±15秒の候補範囲に設定する。
+ */
+function renderOverviewHotspots() {
+  if (!clipOverviewHotspots) return;
+
+  const duration = videoPlayer.duration || 0;
+  if (!duration || !detectedHotspots || detectedHotspots.length === 0) {
+    clipOverviewHotspots.innerHTML = '';
+    return;
+  }
+
+  const maxCount = commentDensityData ? commentDensityData.maxCount : 0;
+  clipOverviewHotspots.innerHTML = detectedHotspots.map((hs) => {
+    const leftPct = (hs.startTime / duration) * 100;
+    const widthPct = Math.max(0.4, ((hs.endTime - hs.startTime) / duration) * 100);
+    const intensity = maxCount ? hs.peakCount / maxCount : 0;
+    const cls = intensity > 0.7 ? 'is-hot' : 'is-warm';
+    return `<span class="clip-overview__hotspot ${cls}" ` +
+      `style="left:${leftPct}%; width:${widthPct}%;" ` +
+      `data-start="${hs.startTime}" data-end="${hs.endTime}" ` +
+      `title="盛り上がり ${escapeHtml(formatTimeShort(hs.startTime))} 〜 ${escapeHtml(formatTimeShort(hs.endTime))} / ピーク${hs.peakCount}"></span>`;
+  }).join('');
+}
+
+/**
+ * メインタイムライン（ズーム/パンする表示範囲）に盛り上がりマーカーを描画する。
+ * オーバービューと違い現在の表示範囲 (clipViewState) 基準で位置を計算し、範囲外は描画しない。
+ * 表示範囲が変わるたび updateClipTimelineUI() から再描画される。
+ */
+function renderTimelineHotspots() {
+  if (!clipTimelineHotspots) return;
+
+  const duration = videoPlayer.duration || 0;
+  if (!duration || !detectedHotspots || detectedHotspots.length === 0) {
+    clipTimelineHotspots.innerHTML = '';
+    return;
+  }
+
+  const viewStart = clipViewState.viewStartTime;
+  const viewEnd = clipViewState.viewEndTime || duration;
+  const viewDur = Math.max(0.001, viewEnd - viewStart);
+  const maxCount = commentDensityData ? commentDensityData.maxCount : 0;
+
+  clipTimelineHotspots.innerHTML = detectedHotspots.map((hs) => {
+    const leftPct = ((hs.startTime - viewStart) / viewDur) * 100;
+    const rightPct = ((hs.endTime - viewStart) / viewDur) * 100;
+    if (rightPct < 0 || leftPct > 100) return ''; // 表示範囲外は描画しない
+    const clampedLeft = Math.max(0, leftPct);
+    const clampedWidth = Math.max(0.4, Math.min(100, rightPct) - clampedLeft);
+    const intensity = maxCount ? hs.peakCount / maxCount : 0;
+    const cls = intensity > 0.7 ? 'is-hot' : 'is-warm';
+    return `<span class="clip-timeline__hotspot ${cls}" ` +
+      `style="left:${clampedLeft}%; width:${clampedWidth}%;" ` +
+      `data-start="${hs.startTime}" data-end="${hs.endTime}" ` +
+      `title="盛り上がり ${escapeHtml(formatTimeShort(hs.startTime))} 〜 ${escapeHtml(formatTimeShort(hs.endTime))} / ピーク${hs.peakCount}"></span>`;
+  }).join('');
+}
+
+/**
+ * 現在の再生位置から時系列で前/次の盛り上がりへ再生ヘッドを移動する（トリミング範囲は変更しない）。
+ * @param {number} direction -1: 前へ / +1: 次へ
+ */
+function jumpToAdjacentHotspot(direction) {
+  if (!videoPlayer.duration) return;
+  if (!commentDensityVisible || !detectedHotspots || detectedHotspots.length === 0) {
+    showToast('先に「💬 密度」をONにして盛り上がりを検出してください', 'warning');
+    return;
+  }
+
+  // detectedHotspots は peakCount 降順なので、時系列（startTime 昇順）に並べ替えてから探す
+  const ordered = [...detectedHotspots].sort((a, b) => a.startTime - b.startTime);
+  const cur = videoPlayer.currentTime;
+  const EPS = 0.3; // 現在位置とほぼ同じ箇所を飛ばすための許容秒
+
+  let target = null;
+  let idx = -1;
+  if (direction > 0) {
+    idx = ordered.findIndex(hs => hs.startTime > cur + EPS);
+    if (idx !== -1) target = ordered[idx];
+  } else {
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      if (ordered[i].startTime < cur - EPS) { target = ordered[i]; idx = i; break; }
+    }
+  }
+
+  if (!target) {
+    showToast(direction > 0 ? 'これより後の盛り上がりはありません' : 'これより前の盛り上がりはありません', 'info', 2000);
+    return;
+  }
+
+  videoPlayer.currentTime = target.startTime;
+  if (videoPlayer.paused) {
+    videoPlayer.play().catch(err => console.error('再生エラー:', err));
+  }
+  showToast(`盛り上がり ${idx + 1}/${ordered.length}（${formatTimeShort(target.startTime)}）`, 'info', 2000);
+}
+
+// 盛り上がりの前後ジャンプボタン
+if (hotspotPrevBtn) hotspotPrevBtn.addEventListener('click', () => jumpToAdjacentHotspot(-1));
+if (hotspotNextBtn) hotspotNextBtn.addEventListener('click', () => jumpToAdjacentHotspot(1));
+
+// オーバービュー上の盛り上がりマーカークリックで候補範囲に設定（イベント委譲）
+if (clipOverviewHotspots) {
+  clipOverviewHotspots.addEventListener('click', (e) => {
+    const marker = e.target.closest('.clip-overview__hotspot');
+    if (!marker) return;
+    e.stopPropagation(); // オーバービューの seek クリックを抑止
+    jumpToHotspot(parseFloat(marker.dataset.start), parseFloat(marker.dataset.end));
+  });
+}
+
+// メインタイムライン上の盛り上がりマーカークリックで候補範囲に設定（イベント委譲）
+if (clipTimelineHotspots) {
+  clipTimelineHotspots.addEventListener('click', (e) => {
+    const marker = e.target.closest('.clip-timeline__hotspot');
+    if (!marker) return;
+    e.stopPropagation(); // メインタイムラインのクリック動作を抑止
+    jumpToHotspot(parseFloat(marker.dataset.start), parseFloat(marker.dataset.end));
+  });
 }
 
 // ウィンドウリサイズ時にCanvas再描画

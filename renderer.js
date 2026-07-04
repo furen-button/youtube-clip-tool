@@ -1130,6 +1130,7 @@ function resetAllSettings() {
     localStorage.removeItem('keyboardShortcuts');
     localStorage.removeItem('fineTuneSettings');
     localStorage.removeItem('timelineClickMode');
+    localStorage.removeItem('shortcutLegendOpen');
     localStorage.removeItem(FileNameTemplate.STORAGE_KEY);
     ColumnResizer.reset();
 
@@ -1149,6 +1150,8 @@ function resetAllSettings() {
 
     shortcuts = { ...defaultShortcuts };
     renderShortcutList();
+    renderShortcutLegend();
+    setShortcutLegendOpen(false);
 
     fineTuneSettings = { smallFrames: 1, largeFrames: 15 };
     updateFineTuneButtonLabels();
@@ -1383,4 +1386,5 @@ async function takeScreenshot() {
 
 initialize();
 loadShortcuts();
+initShortcutLegend();
 ColumnResizer.init();

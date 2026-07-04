@@ -204,8 +204,15 @@
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
                     </button>
                   </div>
+                  <span class="controls-divider">|</span>
+                  <div class="control-group">
+                    <button id="shortcutLegendToggle" type="button" class="btn-icon-sm" title="キーボードショートカット一覧を表示/隠す" aria-expanded="false" aria-controls="shortcutLegend">?</button>
+                  </div>
                 </div>
               </div>
+
+              <!-- キーボードショートカット凡例（常時参照用。? で開閉） -->
+              <div class="shortcut-legend" id="shortcutLegend" hidden></div>
               
               <!-- ループチェックボックス + クリックモード + 現在位置から範囲設定 -->
               <div class="trimming-toolbar">
@@ -219,6 +226,7 @@
                   <button type="button" class="btn-mode" data-mode="range15" title="クリックした位置を中心に±15秒の範囲を作成">±15秒</button>
                   <button type="button" class="btn-mode active" data-mode="range30" title="クリックした位置を中心に±30秒の範囲を作成">±30秒</button>
                 </div>
+                <span class="click-mode-hint" id="clickModeHint"></span>
                 <span class="controls-divider">|</span>
                 <button id="rangeFromCurrent15Btn" type="button" class="btn btn-sm btn-info" title="現在の再生位置を中心に±15秒の範囲を作成 (Shift+クリックでも可)">📍 ±15秒</button>
                 <button id="rangeFromCurrent30Btn" type="button" class="btn btn-sm btn-info" title="現在の再生位置を中心に±30秒の範囲を作成 (Alt+クリックでも可)">📍 ±30秒</button>
@@ -229,6 +237,7 @@
                 <!-- 全体ビュー（動画全長のミニマップ） -->
                 <div class="clip-overview" id="clipOverview" title="クリック: モードに従って動作 / Shift+クリック: ±15秒範囲 / Alt+クリック: ±30秒範囲 / 中央のビューポートをドラッグで表示範囲を移動">
                   <div class="clip-overview__track" id="clipOverviewTrack">
+                    <div class="clip-overview__hotspots" id="clipOverviewHotspots" aria-hidden="true"></div>
                     <div class="clip-overview__selection" id="clipOverviewSelection"></div>
                     <div class="clip-overview__viewport" id="clipOverviewViewport"></div>
                     <div class="clip-overview__playhead" id="clipOverviewPlayhead"></div>
@@ -242,6 +251,7 @@
                 <!-- メインタイムライン（波形と同じ表示範囲） -->
                 <div class="clip-timeline" id="clipTimeline" title="クリック: モードに従って動作 / Shift+クリック: ±15秒範囲 / Alt+クリック: ±30秒範囲 / ハンドルをドラッグで範囲調整">
                   <div class="clip-timeline__track" id="clipTrack">
+                    <div class="clip-timeline__hotspots" id="clipTimelineHotspots" aria-hidden="true"></div>
                     <div class="clip-timeline__selection" id="clipSelection"></div>
                     <div class="clip-timeline__handle clip-timeline__handle--start" id="clipHandleStart">
                       <span class="clip-timeline__time" id="clipStartTime">00:00:00.000</span>
@@ -267,6 +277,10 @@
                   <input type="range" id="hotspotThreshold" class="hotspot-slider" min="1.5" max="5" step="0.1" value="2.0">
                   <span id="hotspotThresholdValue" class="hotspot-threshold-value">×2.0</span>
                   <span class="hotspot-count" id="hotspotCount"></span>
+                  <span class="hotspot-nav">
+                    <button id="hotspotPrevBtn" type="button" class="btn-icon-sm" title="前の盛り上がりへ移動 (,)" aria-label="前の盛り上がりへ移動">◀</button>
+                    <button id="hotspotNextBtn" type="button" class="btn-icon-sm" title="次の盛り上がりへ移動 (.)" aria-label="次の盛り上がりへ移動">▶</button>
+                  </span>
                 </div>
                 <div id="hotspotList" class="hotspot-list"></div>
               </div>
@@ -331,7 +345,9 @@
                 <h3>メタデータ編集</h3>
               </div>
               <div class="metadata-form">
-            <div class="form-group">
+            <!-- 自動生成され手動編集しない値（videoId / ファイル名 / クリップURL）は
+                 画面に出さず DOM 上のみ保持する。自動生成・保存・書き出しはこれらの input を参照する。 -->
+            <div class="form-group" hidden>
               <label for="videoId">YouTube Video ID</label>
               <div class="input-with-button">
                 <input type="text" id="videoId" class="form-input" placeholder="例: dQw4w9WgXcQ" autocomplete="off" list="videoId-history">
@@ -340,7 +356,7 @@
               </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" hidden>
               <label for="fileName">ファイル名 (Title)</label>
               <input type="text" id="fileName" class="form-input" placeholder="例: video_0-10" autocomplete="off">
             </div>
@@ -378,7 +394,7 @@
               <div class="selected-categories" id="selectedCategories"></div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" hidden>
               <label for="clipUrl">クリップURL</label>
               <input type="text" id="clipUrl" class="form-input" placeholder="例: https://youtube.com/watch?v=...&t=10" autocomplete="off">
             </div>
@@ -391,6 +407,17 @@
               </div>
               <div class="preset-chips" id="memoPresetChips" data-empty="プリセットなし（💾で保存）"></div>
             </div>
+
+            <!-- 出力ファイル名（自動生成・読み取り専用）。書き出し先パスを決める値なので確認用に表示する。 -->
+            <div class="output-name-preview" title="書き出し先のファイル名（テンプレートから自動生成）">
+              <span class="output-name-preview__label">出力ファイル名</span>
+              <code class="output-name-preview__value" id="outputNamePreviewValue">—</code>
+            </div>
+            <details class="metadata-details">
+              <summary>詳細情報（自動生成・編集不可）</summary>
+              <div class="metadata-details__row"><span>Video ID</span><code id="detailVideoId">—</code></div>
+              <div class="metadata-details__row"><span>クリップURL</span><code id="detailClipUrl">—</code></div>
+            </details>
 
             <div class="metadata-actions">
               <button id="saveMetadataBtn" class="btn btn-success">メタデータを保存 (JSON)</button>

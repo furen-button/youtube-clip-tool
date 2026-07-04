@@ -146,6 +146,7 @@ function autoGenerateFileName() {
 
   fileNameInput.value = fileName;
   metadata.fileName = fileName;
+  updateMetadataDetailPreview();
 }
 
 function autoGenerateClipUrl() {
@@ -160,6 +161,29 @@ function autoGenerateClipUrl() {
 
   clipUrlInput.value = clipUrl;
   metadata.clipUrl = clipUrl;
+  updateMetadataDetailPreview();
+}
+
+/**
+ * 編集画面に出していない自動生成値（出力ファイル名 / Video ID / クリップURL）を
+ * 読み取り専用のプレビュー欄に反映する。
+ */
+function updateMetadataDetailPreview() {
+  const nameEl = document.getElementById('outputNamePreviewValue');
+  if (nameEl) {
+    const fileName = (fileNameInput.value || '').trim();
+    nameEl.textContent = fileName ? `${fileName}.mp4` : '—';
+  }
+  const idEl = document.getElementById('detailVideoId');
+  if (idEl) {
+    const vid = (videoIdInput.value || '').trim();
+    idEl.textContent = vid || '—';
+  }
+  const urlEl = document.getElementById('detailClipUrl');
+  if (urlEl) {
+    const url = (clipUrlInput.value || '').trim();
+    urlEl.textContent = url || '—';
+  }
 }
 
 /**
@@ -435,6 +459,7 @@ clearMetadataBtn.addEventListener('click', () => {
     memo: ''
   };
 
+  updateMetadataDetailPreview();
   showToast('メタデータをクリアしました', 'success');
 });
 

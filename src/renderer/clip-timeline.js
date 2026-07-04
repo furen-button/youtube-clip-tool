@@ -53,6 +53,9 @@ function updateClipTimelineUI() {
   clipStartTimeLabel.textContent = formatTimeWithMillis(trimState.startTime);
   clipEndTimeLabel.textContent = formatTimeWithMillis(trimState.endTime);
 
+  // 盛り上がりマーカーは表示範囲基準なので、ズーム/パン時に位置を再計算する
+  if (typeof renderTimelineHotspots === 'function') renderTimelineHotspots();
+
   updateClipOverviewUI();
 }
 
@@ -86,8 +89,11 @@ function updateClipOverviewUI() {
 /**
  * タイムラインクリック時の共通処理
  * 修飾キー > クリックモードの優先順で動作を決定
+ * @param {number} time クリック位置の時刻（秒）
+ * @param {MouseEvent} event
+ * @param {boolean} forceSeek true の場合はクリックモードを無視して必ず移動(seek)する（オーバービュー用）
  */
-function handleTimelineClick(time, event) {
+function handleTimelineClick(time, event, forceSeek = false) {
   if (!videoPlayer.duration) return;
 
   if (event.shiftKey) {
@@ -99,11 +105,11 @@ function handleTimelineClick(time, event) {
     return;
   }
 
-  if (timelineClickMode === 'range15') {
+  if (!forceSeek && timelineClickMode === 'range15') {
     applyCenteredRange(time, 15, 'クリック位置を中心に範囲設定');
     return;
   }
-  if (timelineClickMode === 'range30') {
+  if (!forceSeek && timelineClickMode === 'range30') {
     applyCenteredRange(time, 30, 'クリック位置を中心に範囲設定');
     return;
   }
@@ -129,6 +135,13 @@ function setTimelineClickMode(mode) {
   const wrapper = document.querySelector('.clip-timeline-wrapper');
   if (wrapper) {
     wrapper.classList.toggle('timeline-mode-range', mode !== 'seek');
+  }
+
+  // 現在のクリック動作を常時ヒント表示（メインタイムラインの挙動。オーバービューは常に移動）
+  const hintEl = document.getElementById('clickModeHint');
+  if (hintEl) {
+    const labelMap = { seek: '移動', range15: '±15秒範囲', range30: '±30秒範囲' };
+    hintEl.textContent = `メイン=クリックで${labelMap[mode] || '移動'} ／ 全体ビュー=クリックで移動（Shift:±15秒 · Alt:±30秒） ／ ホイール=ズーム（Shift+ホイール=左右パン）`;
   }
 }
 
@@ -201,9 +214,12 @@ function initClipTimeline() {
 
   clipOverviewTrack.addEventListener('click', (e) => {
     if (e.target === clipOverviewViewport) return;
+    // 盛り上がりマーカーは専用ハンドラ（comments.js）で処理する
+    if (e.target.closest && e.target.closest('.clip-overview__hotspot')) return;
     if (!videoPlayer.duration) return;
     const time = getOverviewTimeFromX(e.clientX);
-    handleTimelineClick(time, e);
+    // オーバービューはナビゲーション用: 素クリックは常に移動(seek)。Shift/Alt は範囲設定として残す。
+    handleTimelineClick(time, e, true);
   });
 
   document.addEventListener('pointermove', (e) => {
@@ -271,15 +287,29 @@ function initClipTimeline() {
       const playbackTime = Math.max(trimState.endTime - 2, trimState.startTime);
       videoPlayer.currentTime = playbackTime;
       videoPlayer.play().catch(e => console.error('再生エラー:', e));
+    } else if (wasHandle === 'overview-viewport') {
+      // ビューポート上をほぼ動かさずクリックした場合は移動(seek)として扱う
+      // （全体表示中はビューポートがトラック全体を覆うため、これが無いとオーバービュークリックで移動できない）
+      if (Math.abs(e.clientX - dragStartX) < 3 && videoPlayer.duration) {
+        handleTimelineClick(getOverviewTimeFromX(e.clientX), e, true);
+      }
     }
   });
 
   clipTrack.addEventListener('click', (e) => {
     if (e.target === clipHandleStart || e.target === clipHandleEnd ||
         e.target === clipSelection || e.target.closest('.clip-timeline__handle')) return;
+    if (e.target.closest && e.target.closest('.clip-timeline__hotspot')) return; // マーカーは専用ハンドラで処理
     const time = getTimeFromX(e.clientX);
     handleTimelineClick(time, e);
   });
+
+  // ホイール操作（ズーム / Shift+パン）。メインタイムラインと波形の両方に付与する。
+  // 波形は WaveSurfer 自身のホイール挙動を抑えるため capture フェーズで横取りする。
+  clipTrack.addEventListener('wheel', (e) => handleTimelineWheel(e, clipTrack), { passive: false });
+  if (waveformContainer) {
+    waveformContainer.addEventListener('wheel', (e) => handleTimelineWheel(e, waveformContainer), { passive: false, capture: true });
+  }
 
   initThumbnailPreview(clipTrack, getTimeFromX);
   initThumbnailPreview(clipOverviewTrack, getOverviewTimeFromX);
@@ -308,6 +338,53 @@ function setClipView(start, end, syncWavesurfer = false) {
       console.error('波形連動エラー:', error);
     }
   }
+}
+
+/**
+ * タイムライン/波形上のホイール操作。
+ * 通常: カーソル位置を中心にズーム（上=拡大 / 下=縮小）
+ * Shift: 表示範囲を左右にパン
+ * メインタイムラインと波形は同じ表示範囲 (clipViewState) を共有するため、どちらで操作しても連動する。
+ * @param {WheelEvent} e
+ * @param {HTMLElement} trackEl カーソル位置の基準にする要素
+ */
+const WHEEL_ZOOM_STEP = 1.2; // 1ノッチあたりの拡大率
+const WHEEL_MIN_VIEW_SEC = 2; // 最小表示幅（秒）
+function handleTimelineWheel(e, trackEl) {
+  if (!videoPlayer.duration) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const duration = videoPlayer.duration;
+  const rect = trackEl.getBoundingClientRect();
+  const ratio = rect.width > 0 ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) : 0.5;
+
+  const viewStart = clipViewState.viewStartTime;
+  const viewEnd = clipViewState.viewEndTime || duration;
+  const viewDur = Math.max(0.001, viewEnd - viewStart);
+
+  // Shift（または横スクロール）でパン
+  const primaryDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+  if (e.shiftKey) {
+    const panAmount = (primaryDelta > 0 ? 1 : -1) * viewDur * 0.15;
+    let newStart = viewStart + panAmount;
+    let newEnd = viewEnd + panAmount;
+    if (newStart < 0) { newStart = 0; newEnd = viewDur; }
+    if (newEnd > duration) { newEnd = duration; newStart = duration - viewDur; }
+    setClipView(newStart, newEnd, true);
+    return;
+  }
+
+  // ズーム: カーソル位置の時刻を画面上で固定したまま拡大/縮小
+  const cursorTime = viewStart + ratio * viewDur;
+  const factor = primaryDelta > 0 ? WHEEL_ZOOM_STEP : 1 / WHEEL_ZOOM_STEP; // 下=縮小 / 上=拡大
+  let newDur = Math.max(WHEEL_MIN_VIEW_SEC, Math.min(viewDur * factor, duration));
+
+  let newStart = cursorTime - ratio * newDur;
+  let newEnd = newStart + newDur;
+  if (newStart < 0) { newStart = 0; newEnd = newDur; }
+  if (newEnd > duration) { newEnd = duration; newStart = Math.max(0, duration - newDur); }
+  setClipView(newStart, newEnd, true);
 }
 
 /**

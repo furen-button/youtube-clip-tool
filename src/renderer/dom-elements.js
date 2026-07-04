@@ -47,6 +47,8 @@ const clipOverviewPlayhead = document.getElementById('clipOverviewPlayhead');
 const clipOverviewStart = document.getElementById('clipOverviewStart');
 const clipOverviewEnd = document.getElementById('clipOverviewEnd');
 const clipOverviewRange = document.getElementById('clipOverviewRange');
+const clipOverviewHotspots = document.getElementById('clipOverviewHotspots');
+const clipTimelineHotspots = document.getElementById('clipTimelineHotspots');
 
 const setStartBtn = document.getElementById('setStartBtn');
 const setEndBtn = document.getElementById('setEndBtn');
@@ -81,3 +83,5 @@ const hotspotThreshold = document.getElementById('hotspotThreshold');
 const hotspotThresholdValue = document.getElementById('hotspotThresholdValue');
 const hotspotCount = document.getElementById('hotspotCount');
 const hotspotList = document.getElementById('hotspotList');
+const hotspotPrevBtn = document.getElementById('hotspotPrevBtn');
+const hotspotNextBtn = document.getElementById('hotspotNextBtn');
