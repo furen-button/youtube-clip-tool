@@ -24,7 +24,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
-  mainWindow.webContents.openDevTools(); // 開発時のみ
+  // mainWindow.webContents.openDevTools(); // 開発時のみ
 
   mainWindow.on('closed', () => {
     mainWindow = null;
