@@ -312,6 +312,9 @@ transcribeSerifBtn.addEventListener('click', async () => {
     rubyInput.value = ruby;
     metadata.ruby = ruby;
     updateRubyHighlight();
+    // .value への代入では input イベントが発火しないため、
+    // ファイル名テンプレートの {serif} を手動で再生成する
+    autoGenerateFileName();
     showToast('セリフとルビを生成しました', 'success');
   } catch (err) {
     console.error(err);
